@@ -132,6 +132,15 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
         return port
 
 
+    def test_select(self, loc: tuple[int, int]) -> bool:
+        pixel_index = (loc[1] * self.width + loc[0]) * 4
+        if pixel_index >= len(self.shm_texture_buffer):
+            return False
+        px_alpha = self.shm_texture_buffer[pixel_index + 3]
+        # print(px_alpha, px_alpha > 0.01)
+        return px_alpha > 0.01
+
+
     def finish(self, context: bpy.types.Context) -> None:
         context.area.tag_redraw()
 
@@ -206,7 +215,10 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
             # Refresh graphics.
             region.tag_redraw()
 
-        # return {'RUNNING_MODAL'}
+        web_mouse_pos = (event.mouse_region_x, region.height - event.mouse_region_y)
+
+        if not self.test_select(web_mouse_pos):
+            return {'PASS_THROUGH'}
 
         if _client is None:
             try:
@@ -214,8 +226,6 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
                 print('Connected by', addr)
             except BlockingIOError:
                 return {'RUNNING_MODAL'}
-
-        web_mouse_pos = (event.mouse_region_x, region.height - event.mouse_region_y)
 
         if event.type == 'TIMER':
             # If mouse was moved...

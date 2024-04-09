@@ -1,19 +1,19 @@
-import bpy
-import websockets
 import socket
-import asyncio
 import threading
 import subprocess
-from multiprocessing import Pool, shared_memory
+from multiprocessing import shared_memory
 import sys
-import gpu
 import queue
 import time
 import struct
 import numpy as np
 from os import path
+
+import bpy
+import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
+from .shaders import IMAGE_SHADER
 
 
 FPS = 30
@@ -28,10 +28,9 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
     bl_description = "Web in Blender with CEF-Python"
 
     def invoke(self, context, event):
-        self.shader = gpu.shader.from_builtin('IMAGE')
         self.width = context.region.width
         self.height = context.region.height
-        self.batch = batch_for_shader(self.shader, 'TRI_FAN', {"pos": [(0, 0), (self.width, 0), (self.width, self.height), (0, self.height)], "texCoord": [(0, 1), (1, 1), (1, 0), (0, 0)]})
+        self.batch = batch_for_shader(IMAGE_SHADER, 'TRI_FAN', {"pos": [(0, 0), (self.width, 0), (self.width, self.height), (0, self.height)], "texco": [(0, 1), (1, 1), (1, 0), (0, 0)]})
         self.texture = None
 
         self.draw_frame_count = 0
@@ -73,7 +72,7 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
                 path.join(path.dirname(__file__), 'scripts', 'bws_cefpython.py'),
                 '--',
                 # "file://C:/Users/JF/Videos/AddonsMedia/2020-08-25_09-04-34.mp4",
-                'file://X:/@jfranmatheu/BlenderWebStreaming/blender_web/scripts/color_picker.html', # 'https://twitter.com/Blender', # 'https://youtu.be/_cMxraX_5RE',
+                'file://X:/@jfranmatheu/BlenderWebStreaming/blender_web/scripts/test_web.html', # 'https://twitter.com/Blender', # 'https://youtu.be/_cMxraX_5RE',
                 f'{context.region.width},{context.region.height},{channels}',
                 self.shm.name,
                 str(server_port)
@@ -204,9 +203,9 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
 
         self.draw_frame_count += 1
 
-        self.shader.uniform_sampler("image", self.texture)
+        IMAGE_SHADER.uniform_sampler("image", self.texture)
         gpu.state.blend_set('ALPHA')
-        self.batch.draw(self.shader)
+        self.batch.draw(IMAGE_SHADER)
         gpu.state.blend_set('NONE')
 
         # Calculate FPS every second

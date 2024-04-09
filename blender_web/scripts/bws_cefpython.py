@@ -618,6 +618,7 @@ def create_browser(settings: dict):
                                     window_title="OFFSCREEN")
     browser.SetClientHandler(LoadHandler())
     browser.SetClientHandler(RenderHandler())
+    browser.SetClientHandler(KeyboardHandler())
     browser.SendFocusEvent(True)
     # You must call WasResized at least once to let know CEF that
     # viewport size is available and that OnPaint may be called.
@@ -815,6 +816,21 @@ class RenderHandler(object):
             # Reset the frame count and start time
             self.frame_count = 0
             self.start_time = time()
+
+
+class KeyboardHandler:
+    
+    def OnPressKeyEvent(self, browser: _Browser, event: dict, event_handle: object, is_keyboard_shortcut_out: list) -> bool:
+        """ Called before a keyboard event is sent to the renderer. |event| contains information about the keyboard event.
+            |event_handle| is the operating system event message, if any. Return true if the event was handled or false otherwise.
+            If the event will be handled in OnKeyEvent() as a keyboard shortcut, set |is_keyboard_shortcut_out[0]| to True and return False. """
+        return False
+
+    def OnKeyEvent(self, browser: _Browser, event: dict, event_handle: object) -> bool:
+        """ Called after the renderer and javascript in the page has had a chance to handle the event.
+            |event| contains information about the keyboard event. |os_event| is the operating system event message, if any.
+            Return true if the keyboard event was handled or false otherwise. Description of the KeyEvent type is in the OnPreKeyEvent() callback. """
+        return False
 
 
 if __name__ == '__main__':

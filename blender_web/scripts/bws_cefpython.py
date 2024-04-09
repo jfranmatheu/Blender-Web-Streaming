@@ -432,6 +432,22 @@ class CEF:
         return cef.WindowInfo()
 
 
+
+class KeyEventTypes:
+  # Notification that a key transitioned from "up" to "down".
+  KEYEVENT_RAWKEYDOWN = 0,
+  # Notification that a key was pressed. This does not necessarily correspond
+  # to a character depending on the key and language. Use KEYEVENT_CHAR for
+  # character input.
+  KEYEVENT_KEYDOWN = 1
+  # Notification that a key was released.
+  KEYEVENT_KEYUP = 2
+  # Notification that a character was typed. Use this for text input. Key
+  # down events may generate 0, 1, or more than one character event depending
+  # on the key, locale, and operating system.
+  KEYEVENT_CHAR = 3
+
+
 #############################################################################################
 #############################################################################################
 #############################################################################################
@@ -673,6 +689,16 @@ def handle_events(browser: _Browser):
                 x, y, sign = map(int, commands[1:])
                 # js_code = f"window.scrollBy(0, {scroll_value})"
                 browser.SendMouseWheelEvent(x=x, y=y, deltaX=0, deltaY=sign*10)
+            elif command_id == 'unicode':
+                key_press, char, windows_vk_code, modifiers = map(int, commands[1:])
+                browser.SendKeyEvent({
+                    'type': KeyEventTypes.KEYEVENT_CHAR,  # KeyEventTypes.KEYEVENT_KEYDOWN if key_press==1 else KeyEventTypes.KEYEVENT_KEYUP,
+                    'windows_key_code': char,  # windows_vk_code
+                    'character': char,
+                    'focus_on_editable_field': True,
+                    'is_system_key': False,
+                    'modifiers': modifiers
+                })
             else:
                 continue
             # browser.ExecuteJavascript(js_code)
@@ -820,7 +846,7 @@ class RenderHandler(object):
 
 class KeyboardHandler:
     
-    def OnPressKeyEvent(self, browser: _Browser, event: dict, event_handle: object, is_keyboard_shortcut_out: list) -> bool:
+    def OnPreKeyEvent(self, browser: _Browser, event: dict, event_handle: object, is_keyboard_shortcut_out: list) -> bool:
         """ Called before a keyboard event is sent to the renderer. |event| contains information about the keyboard event.
             |event_handle| is the operating system event message, if any. Return true if the event was handled or false otherwise.
             If the event will be handled in OnKeyEvent() as a keyboard shortcut, set |is_keyboard_shortcut_out[0]| to True and return False. """

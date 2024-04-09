@@ -8,6 +8,7 @@ import time
 import struct
 import numpy as np
 from os import path
+from string import ascii_letters, digits as ascii_digits, ascii_uppercase
 
 import bpy
 import gpu
@@ -20,6 +21,35 @@ FPS = 30
 
 _sock = None
 _client = None
+
+
+VK_CODES_LETTERS = {
+    key: 0x41 + i for i, key in enumerate(ascii_uppercase)
+}
+VK_CODES_DIGITS = {
+    key: 0x30 + i for i, key in enumerate(ascii_digits)
+}
+
+
+class KeyEventFlags:
+    EVENTFLAG_NONE = 0
+    EVENTFLAG_CAPS_LOCK_ON = 1 << 0
+    EVENTFLAG_SHIFT_DOWN = 1 << 1
+    EVENTFLAG_CONTROL_DOWN = 1 << 2
+    EVENTFLAG_ALT_DOWN = 1 << 3
+    EVENTFLAG_LEFT_MOUSE_BUTTON = 1 << 4
+    EVENTFLAG_MIDDLE_MOUSE_BUTTON = 1 << 5
+    EVENTFLAG_RIGHT_MOUSE_BUTTON = 1 << 6
+    # Mac OS-X command key.
+    EVENTFLAG_COMMAND_DOWN = 1 << 7
+    EVENTFLAG_NUM_LOCK_ON = 1 << 8
+    EVENTFLAG_IS_KEY_PAD = 1 << 9
+    EVENTFLAG_IS_LEFT = 1 << 10
+    EVENTFLAG_IS_RIGHT = 1 << 11
+
+
+def char_to_ascii(char):
+    return ord(char)
 
 
 class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
@@ -190,8 +220,28 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
             direction = -1 if event.type == 'WHEELUPMOUSE' else 1
             _client.send(f"scroll,{web_mouse_pos[0]},{web_mouse_pos[1]},{direction}\n".encode())
 
-        elif event.unicode and not event.alt and not event.ctrl and not event.shift:
-            _client.send(f"unicode,{event.unicode}\n".encode())
+        elif event.unicode and event.value in {'PRESS', 'RELEASE'}:
+            modififiers = KeyEventFlags.EVENTFLAG_NONE
+
+            # if ascii_letters.__contains__(event.ascii):
+            #     windows_vk_code = VK_CODES_LETTERS[event.ascii.upper()]
+            #     if event.ascii.isupper():
+            #         modififiers |= KeyEventFlags.EVENTFLAG_CAPS_LOCK_ON
+            # elif ascii_digits.__contains__(event.ascii):
+            #     windows_vk_code = VK_CODES_DIGITS[event.ascii]
+            # else:
+            #     return {'RUNNING_MODAL'}
+            windows_vk_code = 0
+
+            if event.alt:
+                modififiers |= KeyEventFlags.EVENTFLAG_ALT_DOWN
+            if event.shift:
+                modififiers |= KeyEventFlags.EVENTFLAG_SHIFT_DOWN
+            if event.ctrl:
+                modififiers |= KeyEventFlags.EVENTFLAG_CONTROL_DOWN
+
+            key_press = 1 if event.value == 'PRESS' else 0
+            _client.send(f"unicode,{key_press},{ord(event.unicode)},{windows_vk_code},{modififiers}\n".encode())
 
         return {'RUNNING_MODAL'}
 

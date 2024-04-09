@@ -669,7 +669,7 @@ def handle_events(browser: _Browser):
             line, buffer = buffer.split('\n', 1)
             commands = line.split(',')
             command_id = commands[0]
-            print(command_id, commands)
+            # print(command_id, commands)
             if command_id == '@':
                 # SPECIAL COMMANDS FROM PARENT PROCESS.
                 command_id = commands[1]
@@ -820,7 +820,7 @@ class RenderHandler(object):
             del image
             del arr
 
-            print("[screenshot.py] Saved image: {path}".format(path=SCREENSHOT_PATH))
+            # print("[screenshot.py] Saved image: {path}".format(path=SCREENSHOT_PATH))
 
             # See comments in exit_app() why PostTask must be used
             # def _move_mousewheel(browser: _Browser):

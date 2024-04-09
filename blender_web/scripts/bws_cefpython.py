@@ -650,12 +650,10 @@ def handle_events(browser: _Browser):
     while True:
         if SOCKET_CLIENT is None:
             break
-        # print("[screenshot.py] Process::handle_events")
         data = SOCKET_CLIENT.recv(100)
         if not data:
             continue
         buffer += data.decode()
-        # print(buffer)
         while '\n' in buffer:
             line, buffer = buffer.split('\n', 1)
             commands = line.split(',')
@@ -663,31 +661,15 @@ def handle_events(browser: _Browser):
             print(command_id, commands)
             if command_id == 'mousemove':
                 x, y = map(int, commands[1:])
-                # js_code = f"""
-                # var event = new MouseEvent('mousemove', {{
-                #     'view': window,
-                #     'bubbles': true,
-                #     'cancelable': true,
-                #     'screenX': {x},
-                #     'screenY': {y},
-                #     'clientX': {x},
-                #     'clientY': {y}
-                # }});
-                # document.dispatchEvent(event);
-                # """
                 browser.SendMouseMoveEvent(x=x, y=y, mouseLeave=False)
             elif command_id == 'click':
                 x, y, mouse_up = map(int, commands[1:-1])
-                # js_code = f"document.elementFromPoint({x}, {y}).click();"
                 mouseButtonType = getattr(cef, f"MOUSEBUTTON_{commands[-1].upper()}")
                 browser.SendMouseClickEvent(x=x, y=y, mouseButtonType=mouseButtonType, mouseUp=bool(mouse_up), clickCount=1)
             elif command_id == 'resize':
                 width, height = map(int, commands[1:])
-                # js_code = f"window.setViewport({{'width': {width}, 'height': {height}}})"
-                # browser.GetWindowHandle()
             elif command_id == 'scroll':
                 x, y, sign = map(int, commands[1:])
-                # js_code = f"window.scrollBy(0, {scroll_value})"
                 browser.SendMouseWheelEvent(x=x, y=y, deltaX=0, deltaY=sign*10)
             elif command_id == 'unicode':
                 key_press, char, windows_vk_code, modifiers = map(int, commands[1:])
@@ -701,8 +683,6 @@ def handle_events(browser: _Browser):
                 })
             else:
                 continue
-            # browser.ExecuteJavascript(js_code)
-            # browser.WasResized()
 
         buffer = ''
 

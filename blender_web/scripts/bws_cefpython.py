@@ -721,7 +721,7 @@ class LoadHandler(object):
             # Give up to 2 seconds for the OnPaint call. Most of the time
             # it is already called, but sometimes it may be called later.
             ## CEF.PostDelayedTask(cef.TID_UI, 2000, save_screenshot, browser)
-            CEF.PostDelayedTask(cef.TID_UI, 20000, exit_app, browser)
+            CEF.PostDelayedTask(cef.TID_UI, 1000 * 60 * 60, exit_app, browser)
 
             # def click_button(browser: _Browser):
             #     browser.ExecuteJavascript("""

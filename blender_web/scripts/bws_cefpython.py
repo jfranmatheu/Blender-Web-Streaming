@@ -45,6 +45,7 @@ from typing import Any
 from time import time
 from multiprocessing import shared_memory
 import threading
+import socket
 
 try:
     from PIL import Image, __version__ as PILLOW_VERSION
@@ -577,7 +578,6 @@ def start_socket_client():
 
     print("[screenshot.py] Connecting to socket server..")
 
-    import socket
     # Create a socket object
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     # Connect to the server socket.gethostname()
@@ -595,12 +595,18 @@ def exit_app(browser: _Browser):
     #   function to call exit_app from these events.
     print("[screenshot.py] Close browser and exit app")
     global SHM
+    global TEXTURE_BUFFER
     global SOCKET_CLIENT
     if SOCKET_CLIENT:
         SOCKET_CLIENT.close()
-    SHM.close()
+        SOCKET_CLIENT = None
+    if SHM:
+        SHM.close()
+        SHM = None
+        TEXTURE_BUFFER = None
     browser.CloseBrowser()
     CEF.QuitMessageLoop()
+    sys.exit(0)
 
 
 def open_screenshot_with_default_application(path):
@@ -649,8 +655,14 @@ def handle_events(browser: _Browser):
     buffer = ''
     while True:
         if SOCKET_CLIENT is None:
+            exit_app(browser)
             break
-        data = SOCKET_CLIENT.recv(100)
+        try:
+            data = SOCKET_CLIENT.recv(100)
+        except socket.error as e:
+            print(e)
+            exit_app(browser)
+            break
         if not data:
             continue
         buffer += data.decode()

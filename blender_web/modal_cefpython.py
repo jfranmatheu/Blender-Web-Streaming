@@ -89,14 +89,13 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
 
 
     def start_server(self) -> int:
-        port = 8679
         global _sock
         global _client
         _client = None
         host = socket.gethostname()
         _sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         _sock.setblocking(0)  # set to non-blocking mode
-        _sock.bind(('127.0.0.1', port))
+        _sock.bind(('127.0.0.1', 0))
         _sock.listen(1)
         ip, port = _sock.getsockname()
         print("Starting socket server..", ip, port)

@@ -606,7 +606,6 @@ def exit_app(browser: _Browser):
         TEXTURE_BUFFER = None
     browser.CloseBrowser()
     CEF.QuitMessageLoop()
-    sys.exit(0)
 
 
 def open_screenshot_with_default_application(path):
@@ -671,7 +670,13 @@ def handle_events(browser: _Browser):
             commands = line.split(',')
             command_id = commands[0]
             print(command_id, commands)
-            if command_id == 'mousemove':
+            if command_id == '@':
+                # SPECIAL COMMANDS FROM PARENT PROCESS.
+                command_id = commands[1]
+                if command_id == 'KILL':
+                    exit_app(browser)
+                    return None
+            elif command_id == 'mousemove':
                 x, y = map(int, commands[1:])
                 browser.SendMouseMoveEvent(x=x, y=y, mouseLeave=False)
             elif command_id == 'click':

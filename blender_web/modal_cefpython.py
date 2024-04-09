@@ -132,36 +132,55 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
         return port
 
 
+    def finish(self, context: bpy.types.Context) -> None:
+        context.area.tag_redraw()
+
+        # Clear event Timer.
+        context.window_manager.event_timer_remove(self._timer)
+        self._timer = None
+
+        # Clear draw handler.
+        context.space_data.draw_handler_remove(self._draw_handler, 'WINDOW')
+        self._draw_handler = None
+
+        def _close_browser():
+            global _sock
+            global _client
+            if _sock is None or _client is None:
+                return None
+            msg = f"@,KILL\n".encode()
+            try:
+                _client.send(msg)
+                bytes_sent = _client.send(msg)
+                if bytes_sent != len(msg):
+                    print('Not all bytes were sent! Force close the client')
+                    _client.close()
+            except socket.error as e:
+                print(e)
+                _client = None
+                _sock.close()
+                _sock = None
+            return None
+
+        bpy.app.timers.register(_close_browser)
+
+        # Terminate CEF process.
+        if self.process:
+            self.process.terminate()
+
+        # Close SharedMemory block.
+        if self.shm:
+            self.shm.close()
+            self.shm.unlink()
+            del self.shm_texture_buffer
+
+
     def modal(self, context, event):
         global _sock
         global _client
 
         if event.type == 'ESC':
-            context.area.tag_redraw()
-
-            # Clear event Timer.
-            context.window_manager.event_timer_remove(self._timer)
-            self._timer = None
-
-            # Clear draw handler.
-            context.space_data.draw_handler_remove(self._draw_handler, 'WINDOW')
-            self._draw_handler = None
-
-            # Close server.
-            if _sock is not None:
-                _sock.close()
-                _sock = None
-                _client = None
-
-            # Terminate CEF process.
-            if self.process:
-                self.process.terminate()
-
-            # Close SharedMemory block.
-            if self.shm:
-                self.shm.close()
-                self.shm.unlink()
-                del self.shm_texture_buffer
+            self.finish(context)
             return {'FINISHED'}
 
         region = context.region

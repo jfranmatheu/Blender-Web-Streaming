@@ -31,7 +31,7 @@ uniform sampler2D image;
 void main()
 {
     fragColor = texture(image, texco_interp);
-    fragColor.rgb = toLinear(fragColor); // fast method: pow(fragColor.rgb, vec3(2.2));
+    fragColor = toLinear(fragColor); // fast method: pow(fragColor.rgb, vec3(2.2));
 }
 """
     )

@@ -2,6 +2,38 @@ const { app, BrowserWindow, ipcMain } = require('electron')
 const path = require('path')
 const robot = require('robotjs')
 const net = require('net');
+const WebSocket = require('ws');
+const puppeteer = require('puppeteer');
+
+
+/*
+async function run() {
+  const browser = await puppeteer.launch();
+  const page = await browser.newPage();
+  
+  await page.goto('https://www.google.com');
+  
+  // simulate a user typing into an input box
+  await page.type('#input-id', 'Hello World');
+  
+  // simulate a user clicking a button
+  await page.click('#button-id');
+  
+  await browser.close();
+}
+
+run();
+*/
+
+const wss = new WebSocket.Server({ port: 8080 });
+
+wss.on('connection', ws => {
+  ws.on('message', message => {
+    console.log(`Received message => ${message}`)
+  })
+  ws.send('Hello! Message From Server!!')
+});
+
 
 let mainWindow
 

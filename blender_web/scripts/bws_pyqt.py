@@ -1,6 +1,7 @@
-from PyQt5.QtCore import QUrl, QMetaObject, Q_ARG, QTimer, Qt, pyqtSlot
+from PyQt5.QtCore import QUrl, QMetaObject, Q_ARG, QTimer, Qt, pyqtSlot, QCoreApplication, QEvent, QPoint, QRect
 from PyQt5.QtWebEngineWidgets import QWebEngineView, QWebEnginePage
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QMouseEvent, QKeyEvent
 import sys
 import numpy as np
 from time import time
@@ -10,6 +11,8 @@ import socket
 from string import Template
 from PIL import Image
 
+
+FPS = 30
 
 # Config
 URL = "https://twitter.com/Blender"
@@ -94,6 +97,7 @@ def create_app():
 def start_socket_client():
     global SERVER_PORT
     if not SERVER_PORT:
+        print("[bws_pyqt.py] NO SERVER PORT")
         return None
 
     print("[bws_pyqt.py] Connecting to socket server..")
@@ -145,6 +149,37 @@ if (element) {
     element.dispatchEvent(mouseMoveEvent);
 """)
 
+MOUSE_MOVE_JS = """
+var lastActiveElement = null;
+
+function mouseMove(x, y) {
+    var element = document.elementFromPoint(x, y);
+    if (element) {
+        var mouseMoveEvent = new MouseEvent('mousemove', {
+            'view': window,
+            'bubbles': true,
+            'cancelable': true,
+            'screenX': x,
+            'screenY': y,
+            'clientX': x,
+            'clientY': y
+        });
+        element.dispatchEvent(mouseMoveEvent);
+
+        // If there was a last active element and it's not the current element, blur it
+        if (lastActiveElement && lastActiveElement !== element && typeof lastActiveElement.blur === 'function') {
+            lastActiveElement.blur();
+        }
+
+        // If the current element can be focused, focus it and set it as the last active element
+        if (typeof element.focus === 'function') {
+            element.focus();
+            lastActiveElement = element;
+        }
+    }
+}
+"""
+
 MOUSECLICK = Template("""
 var x = ${x}; // replace with your x coordinate
 var y = ${y}; // replace with your y coordinate
@@ -169,8 +204,15 @@ if (element) element.dispatchEvent(event);
 """)
 
 
-def mouse_move(page: QWebEnginePage, x: int, y: int):
-    page.runJavaScript(MOUSEMOVE.substitute(x=x, y=y))
+def mouse_move(view: 'Viewer', page: QWebEnginePage, x: int, y: int):
+    print("mouse is moving to:", x, y)
+    # create a QMouseEvent
+    event = QMouseEvent(QEvent.MouseMove, QPoint(x, y), Qt.NoButton, Qt.NoButton, Qt.NoModifier)
+    # post the event to the QApplication
+    QCoreApplication.postEvent(view, event)
+    # page.runJavaScript(MOUSEMOVE.substitute(x=x, y=y))
+    # page.runJavaScript(MOUSE_MOVE_JS + f'\nmouseMove({x}, {y});')
+    page.runJavaScript(f'mouseMove({x}, {y});')
 
 def mouse_click(page: QWebEnginePage, x: int, y: int):
     page.runJavaScript(MOUSECLICK.substitute(x=x, y=y))
@@ -182,7 +224,7 @@ def keypress(page: QWebEnginePage, key: str):
     page.runJavaScript(KEYPRESS.substitute(key=key))
 
 
-def handle_events(view: QWebEngineView, page: QWebEnginePage):
+def handle_events(view: 'Viewer', page: QWebEnginePage):
     global SOCKET_CLIENT
 
     print("[bws_pyqt.py] Start::handle_events", SOCKET_CLIENT)
@@ -214,28 +256,33 @@ def handle_events(view: QWebEngineView, page: QWebEnginePage):
                     return None
             elif command_id == 'mousemove':
                 x, y = map(int, commands[1:])
-                mouse_move(page, x=x, y=y)
+                mouse_move(view, page, x=x, y=y)
+                view.dirty = True
             elif command_id == 'click':
                 x, y = map(int, commands[1:3])
                 mouse_click(page, x=x, y=y)
-                view.safe_refresh_buffer()
+                view.dirty = True
             elif command_id == 'resize':
                 width, height = map(int, commands[1:])
             elif command_id == 'scroll':
                 x, y, sign = map(int, commands[1:])
                 scroll_by(page, deltaX=0, deltaY=sign*10)
-                view.safe_refresh_buffer()
+                view.dirty = True
             elif command_id == 'unicode':
                 key_press, key, modifiers = map(int, commands[1:])
                 keypress(page, key=key)
-                view.safe_refresh_buffer()
+                view.dirty = True
             else:
                 continue
 
         buffer = ''
 
 
-def refresh_buffer(view: QWebEngineView):
+def refresh_buffer(view: 'Viewer'):
+    ## if not view.dirty:
+    ##     return
+    ## view.dirty = False
+
     global TEXTURE_BUFFER
     if TEXTURE_BUFFER is None:
         return
@@ -246,7 +293,7 @@ def refresh_buffer(view: QWebEngineView):
     ptr = image.constBits()
     ptr.setsize(VIEWPORT_WIDTH * VIEWPORT_HEIGHT * 4)
 
-    image = Image.frombytes("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), ptr, "raw", "RGBA", 0, 1)
+    image = Image.frombytes("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), ptr, "raw") #, "RGBA", 0, 1)
     # image.save(SCREENSHOT_PATH, "PNG")
     # Convert the image to a numpy array
     arr = np.array(image)
@@ -257,6 +304,8 @@ def refresh_buffer(view: QWebEngineView):
     # Flatten the array
     arr = arr.flatten()
 
+    if TEXTURE_BUFFER is None:
+        return
     TEXTURE_BUFFER[:] = arr[:]
     image.close()
     del image
@@ -272,19 +321,35 @@ class Viewer(QWebEngineView):
     def __init__(self, *args, **kwargs):
         super(Viewer, self).__init__(*args, **kwargs)
         self.setPage(MyPage(self))
+        ## self.repaintRequested.connect(self.on_repaint_requested)
+        self.dirty = True
+        self.frame_count = 0
+        self.start_time = time()
 
     @pyqtSlot()
     def refresh_buffer(self):
-        print("Refreshing buffer...")  # Implement your actual logic here
+        # Process a frame...
+        self.frame_count += 1
+
+        # print("Refreshing buffer...")  # Implement your actual logic here
         refresh_buffer(self)
+
+        # Calculate FPS every second
+        if time() - self.start_time > 1.0:  # one second has passed
+            fps = self.frame_count / (time() - self.start_time)
+            print(f'[screenshot.py] FPS: {fps}')
+
+            # Reset the frame count and start time
+            self.frame_count = 0
+            self.start_time = time()
 
     def safe_refresh_buffer(self):
         QMetaObject.invokeMethod(self, "refresh_buffer", Qt.QueuedConnection)
 
     def load_url(self, url):
         self.load(QUrl(url))
-        self.show()
         self.loadFinished.connect(self.on_load_finished)
+        self.show()
 
     def on_load_finished(self):
         print('[bws_pyqt.py] Load finished')
@@ -297,9 +362,70 @@ class Viewer(QWebEngineView):
             observer.observe(document, { attributes: true, childList: true, characterData: true, subtree: true });
         """)
 
+        self.page().runJavaScript("""
+            window.lastHoveredElement = null;
+
+            window.mouseMove = function(x, y) {
+                var element = document.elementFromPoint(x, y);
+                element.dispatchEvent(mouseEnterEvent);
+                if (element) {
+                    if (window.lastHoveredElement && window.lastHoveredElement !== element) {
+                        var mouseOutEvent = new MouseEvent('mouseout', {
+                            'view': window,
+                            'bubbles': true,
+                            'cancelable': true
+                        });
+                        window.lastHoveredElement.dispatchEvent(mouseOutEvent);
+                    }
+
+                    if (element !== window.lastHoveredElement) {
+                        var mouseEnterEvent = new MouseEvent('mouseenter', {
+                            'view': window,
+                            'bubbles': true,
+                            'cancelable': true
+                        });
+                        element.dispatchEvent(mouseEnterEvent);
+                    }
+
+                    var mouseOverEvent = new MouseEvent('mouseover', {
+                        'view': window,
+                        'bubbles': true,
+                        'cancelable': true
+                    });
+                    element.dispatchEvent(mouseOverEvent);
+
+                    var mouseMoveEvent = new MouseEvent('mousemove', {
+                        'view': window,
+                        'bubbles': true,
+                        'cancelable': true,
+                        'screenX': x,
+                        'screenY': y,
+                        'clientX': x,
+                        'clientY': y
+                    });
+                    element.dispatchEvent(mouseMoveEvent);
+
+                    window.lastHoveredElement = element;
+                }
+            };
+        """)
+
         print("[bws_pyqt.py] Running thread to handle events from Blender...")
         self.thread = threading.Thread(target=handle_events, args=(self, self.page(),), name='b3d_cef_handle_events')
         self.thread.start()
+
+        # Create a QTimer
+        self.timer = QTimer(self)
+        # Connect the timer's timeout signal to the refresh_buffer slot
+        self.timer.timeout.connect(self.refresh_buffer)
+        # Start the timer to trigger every 1000 milliseconds (or adjust as needed)
+        self.timer.start(int(1/FPS * 1000))
+
+    ## @pyqtSlot(QRect)
+    ## def on_repaint_requested(self, rect):
+    ##     print("Repaint requested for:", rect)
+    ##     # refresh the buffer here if needed
+    ##     self.refresh_buffer()
 
 
 if __name__ == '__main__':

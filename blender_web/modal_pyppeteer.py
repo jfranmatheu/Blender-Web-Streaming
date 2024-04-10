@@ -141,7 +141,7 @@ class BWS_OT_web_navigator_pyppeteer(bpy.types.Operator):
                 '--',
                 f'{context.region.width},{context.region.height},{channels}',
                 self.shm.name,
-                'https://twitter.com/Blender',
+                'file://X:/@jfranmatheu/BlenderWebStreaming/blender_web/scripts/test_web.html',
                 self.image.filepath_raw
             ],
             shell=True

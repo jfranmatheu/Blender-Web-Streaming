@@ -1,3 +1,10 @@
+lib/
+*.log
+.env*/
+webrtc_event_logs/
+VideoDecodeStats/
+blob_storage/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -8,12 +15,6 @@ _tests/
 .idea/
 .VSCodeCounter/
 node_modules/
-
-*.log
-.env*/
-webrtc_event_logs/
-VideoDecodeStats/
-blob_storage/
 
 # C extensions
 *.so

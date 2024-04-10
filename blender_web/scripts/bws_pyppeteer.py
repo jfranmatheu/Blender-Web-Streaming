@@ -35,6 +35,51 @@ print(sys.argv)
 texture_data_queue = queue.Queue(maxsize=1)
 
 
+minimal_args = [
+  '--autoplay-policy=user-gesture-required',
+  '--disable-background-networking',
+  '--disable-background-timer-throttling',
+  '--disable-backgrounding-occluded-windows',
+  '--disable-breakpad',
+  '--disable-client-side-phishing-detection',
+  '--disable-component-update',
+  '--disable-default-apps',
+  '--disable-dev-shm-usage',
+  '--disable-domain-reliability',
+  '--disable-extensions',
+  '--disable-features=AudioServiceOutOfProcess',
+  '--disable-hang-monitor',
+  '--disable-ipc-flooding-protection',
+  '--disable-notifications',
+  '--disable-offer-store-unmasked-wallet-cards',
+  '--disable-popup-blocking',
+  '--disable-print-preview',
+  '--disable-prompt-on-repost',
+  '--disable-renderer-backgrounding',
+  '--disable-setuid-sandbox',
+  '--disable-speech-api',
+  '--disable-sync',
+  '--hide-scrollbars',
+  '--ignore-gpu-blacklist',
+  '--metrics-recording-only',
+  '--mute-audio',
+  '--no-default-browser-check',
+  '--no-first-run',
+  '--no-pings',
+  '--no-sandbox',
+  '--no-zygote',
+  '--password-store=basic',
+  '--use-gl=swiftshader',
+  '--use-mock-keychain',
+  '--headless',
+]
+
+blocked_domains = [
+  'googlesyndication.com',
+  'adservice.google.com',
+]
+
+
 async def tcp_client():
     reader, writer = await asyncio.open_connection(
         '127.0.0.1', 8671)
@@ -53,15 +98,29 @@ async def tcp_client():
     args.append('--use-gl=angle');args.append('--use-angle=gl-egl')
     browser = await pyppeteer.launch(
         {
+            'userDataDir': './user_data/',
             'headless': True,
             'ignoreDefaultArgs': True,
-            'args': args
+            'args': args # minimal_args
         },
     )
 
     page = await browser.newPage()
     await page.setViewport({"width": START_WIDTH, "height": START_HEIGHT})
-    await page.goto(URL) # 'chrome://gpu'
+    # Go to the webpage and wait until network is idle
+    await page.goto(URL) # , waitUntil='networkidle2') # 'chrome://gpu'
+    # Or, if you control the page, you can wait for a specific selector to appear
+    # await page.waitForSelector('.take_screenshot_now')
+
+    page.setRequestInterception(True)
+
+    @page.on('request')
+    async def handle_request(request):
+        url = request.url
+        if any(domain in url for domain in blocked_domains):
+            await request.abort()
+        else:
+            await request.continue_()
 
     def _screenshot_worker(writer):
         print("client:shm")
@@ -73,6 +132,9 @@ async def tcp_client():
         start_time = time()
 
         while True:
+            if writer is None or writer.is_closing():
+                break
+
             item = texture_data_queue.get()
             if item is None:
                 continue
@@ -142,7 +204,13 @@ async def tcp_client():
                 ### print("_handle_data:: Received data:", line)
                 commands = line.split(',')
                 command_id = commands[0]
-                if command_id == 'mousemove':
+                if command_id == '@':
+                    # SPECIAL COMMANDS FROM PARENT PROCESS.
+                    command_id = commands[1]
+                    if command_id == 'KILL':
+                        # exit_app()
+                        return None
+                elif command_id == 'mousemove':
                     x, y = map(int, commands[1:])
                     await page.mouse.move(x, y)
                     # force_screenshot = True

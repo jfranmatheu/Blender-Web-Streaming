@@ -46,6 +46,7 @@ from time import time
 from multiprocessing import shared_memory
 import threading
 import socket
+import struct
 
 try:
     from PIL import Image, __version__ as PILLOW_VERSION
@@ -820,6 +821,9 @@ class RenderHandler(object):
             del image
             del arr
 
+            global SOCKET_CLIENT
+            SOCKET_CLIENT.send(struct.pack('?', True))
+
             # print("[screenshot.py] Saved image: {path}".format(path=SCREENSHOT_PATH))
 
             # See comments in exit_app() why PostTask must be used
@@ -842,7 +846,7 @@ class RenderHandler(object):
 
 
 class KeyboardHandler:
-    
+
     def OnPreKeyEvent(self, browser: _Browser, event: dict, event_handle: object, is_keyboard_shortcut_out: list) -> bool:
         """ Called before a keyboard event is sent to the renderer. |event| contains information about the keyboard event.
             |event_handle| is the operating system event message, if any. Return true if the event was handled or false otherwise.

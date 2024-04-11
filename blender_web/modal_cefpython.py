@@ -9,6 +9,7 @@ import struct
 import numpy as np
 from os import path
 from string import ascii_letters, digits as ascii_digits, ascii_uppercase
+import struct
 
 import bpy
 import gpu
@@ -48,8 +49,38 @@ class KeyEventFlags:
     EVENTFLAG_IS_RIGHT = 1 << 11
 
 
-def char_to_ascii(char):
-    return ord(char)
+is_texture_data_updated = False
+buffer_size_boolean = struct.calcsize('?')
+
+
+def timer_callback():
+    global _sock
+    if _sock is None:
+        return 1.0
+    global _client
+    if _client is None:
+        try:
+            _client, addr = _sock.accept()
+            print('Connected by', addr)
+        except BlockingIOError:
+            _client = None
+        return 0.01
+    if not isinstance(_client, socket.SocketType):
+        _client = None
+        return 0.1
+    try:
+        data = _client.recv(buffer_size_boolean)
+        if data:
+            ### print("timer_callback:: texture is updated!")
+            global is_texture_data_updated
+            is_texture_data_updated = True
+    except BlockingIOError:
+        pass
+    except OSError:
+        _sock = None
+        _client = None
+        return None
+    return 0.01
 
 
 class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
@@ -102,13 +133,16 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
                 path.join(path.dirname(__file__), 'scripts', 'bws_cefpython.py'),
                 '--',
                 # "file://C:/Users/JF/Videos/AddonsMedia/2020-08-25_09-04-34.mp4",
-                'file://X:/@jfranmatheu/BlenderWebStreaming/blender_web/scripts/test_web.html', # 'https://twitter.com/Blender', # 'https://youtu.be/_cMxraX_5RE',
+                'file://X:/@jfranmatheu/BlenderWebStreaming/blender_web/scripts/color_picker.html', # 'https://twitter.com/Blender', # 'https://youtu.be/_cMxraX_5RE',
                 f'{context.region.width},{context.region.height},{channels}',
                 self.shm.name,
                 str(server_port)
             ],
             shell=True
         )
+
+        # Open socket reader flow.
+        bpy.app.timers.register(timer_callback)
 
         # Start handlers.
         global FPS
@@ -152,6 +186,10 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
         context.space_data.draw_handler_remove(self._draw_handler, 'WINDOW')
         self._draw_handler = None
 
+        # Close the socket reader flow.
+        if bpy.app.timers.is_registered(timer_callback):
+            bpy.app.timers.unregister(timer_callback)
+
         def _close_browser():
             global _sock
             global _client
@@ -188,29 +226,20 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
         global _sock
         global _client
 
-        if event.type == 'ESC':
+        if _sock is None or event.type == 'ESC':
             self.finish(context)
             return {'FINISHED'}
 
         region = context.region
 
         if event.type == 'TIMER':
-            # Refresh GPUTexture from SharedMemory buffer.
-            # self.image.pixels.foreach_set(self.shm_texture_buffer)
-            # self.texture = gpu.texture.from_image(self.image)
-
-            # pixels = width * height * array.array('f', [0.1, 0.2, 0.1, 1.0])
-            # pixels = gpu.types.Buffer('FLOAT', width * height * 4, pixels)
-            # self.texture = gpu.types.GPUTexture((width, height), format='RGBA16F', data=pixels)
-
-            try:
-                # No hace falta actualizar buffer al usar el mismo del SHM.
-                # self.gpu_buffer[:] = self.shm_texture_buffer[:]
-                # self.gpu_buffer = gpu.types.Buffer('FLOAT', self.width * self.height * 4, self.shm_texture_buffer)
-                # Volcar buffuer actualizado a la GPU.
-                self.texture = gpu.types.GPUTexture((self.width, self.height), format='RGBA32F', data=self.gpu_buffer)
-            except Exception as e:
-                print(e)
+            global is_texture_data_updated
+            if is_texture_data_updated:
+                is_texture_data_updated = False
+                try:
+                    self.texture = gpu.types.GPUTexture((self.width, self.height), format='RGBA32F', data=self.gpu_buffer)
+                except Exception as e:
+                    print(e)
 
             # Refresh graphics.
             region.tag_redraw()

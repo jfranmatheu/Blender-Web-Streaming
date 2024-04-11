@@ -477,9 +477,10 @@ def main():
         "context_menu": {
             "enabled": False,
         },
+        "downloads_enabled": False,
+        "background_color": 0x00, # fully transparent
         # "unique_request_context_per_browser": True,
         # "remote_debugging_port": 0,
-        # "downloads_enabled": False,
         # "ignore_certificate_errors": True,
         # "auto_zooming": "system_dpi",
         # "locales_dir_path": cef.GetModuleDirectory()+"/locales",
@@ -506,6 +507,7 @@ def main():
     browser_settings = {
         # Tweaking OSR performance (Issue #240)
         "windowless_frame_rate": 30,  # Default frame rate in CEF is 30
+        "background_color": 0x00, # fully transparent
         # "file_access_from_file_urls_allowed": True,
         # "universal_access_from_file_urls_allowed": True,
     }

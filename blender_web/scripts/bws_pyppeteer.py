@@ -12,22 +12,25 @@ os.environ['PYPPETEER_CHROMIUM_REVISION'] = PYPPETEER_CHROMIUM_REVISION
 import sys
 import asyncio
 import pyppeteer
-import websockets
-from time import time, sleep
+from time import time
 from multiprocessing import shared_memory
 import numpy as np
-import base64
 from PIL import Image
 import io
 import threading
 import queue
+import base64
 
 
+SERVER_PORT = sys.argv[-5]
 START_WIDTH, START_HEIGHT, IMAGE_CHANNELS = [int(v) for v in sys.argv[-4].split(',')]
 SHARED_MEMORY_ID = sys.argv[-3]
 URL = sys.argv[-2]
 RENDER_PATH = sys.argv[-1]
 FPS = 24
+
+SHM = shared_memory.SharedMemory(name=SHARED_MEMORY_ID)
+TEXTURE_BUFFER = np.ndarray((START_WIDTH * START_HEIGHT * IMAGE_CHANNELS, ), dtype=np.float32, buffer=SHM.buf)
 
 print(sys.argv)
 
@@ -81,8 +84,9 @@ blocked_domains = [
 
 
 async def tcp_client():
+    global SERVER_PORT
     reader, writer = await asyncio.open_connection(
-        '127.0.0.1', 8671)
+        '127.0.0.1', SERVER_PORT)
 
     print("CLIENT:: connected to server!")
 
@@ -112,6 +116,7 @@ async def tcp_client():
     # Or, if you control the page, you can wait for a specific selector to appear
     # await page.waitForSelector('.take_screenshot_now')
 
+    # OPTIMIZATION: Avoid ads connections slowing down the browser.
     page.setRequestInterception(True)
 
     @page.on('request')
@@ -122,6 +127,7 @@ async def tcp_client():
         else:
             await request.continue_()
 
+    # Screenshot.
     def _screenshot_worker(writer):
         print("client:shm")
         shm = shared_memory.SharedMemory(name=SHARED_MEMORY_ID)
@@ -191,41 +197,43 @@ async def tcp_client():
     t = threading.Thread(target=_screenshot_worker, args=(writer,))
     t.start()
 
-    print("CLIENT:: browser and page ready!")
 
-    async def _handle_data(reader, page: pyppeteer.page.Page):
+    async def _handle_data(reader: asyncio.StreamReader, page: pyppeteer.page.Page):
         buffer = ''
+
+        async def _repaint():
+            return
+            # await page.evaluate('requestAnimationFrame(() => {})')
 
         while True:
             data = await reader.read(100)
             buffer += data.decode()
             while '\n' in buffer:
                 line, buffer = buffer.split('\n', 1)
-                ### print("_handle_data:: Received data:", line)
                 commands = line.split(',')
                 command_id = commands[0]
                 if command_id == '@':
                     # SPECIAL COMMANDS FROM PARENT PROCESS.
                     command_id = commands[1]
                     if command_id == 'KILL':
-                        # exit_app()
                         return None
                 elif command_id == 'mousemove':
                     x, y = map(int, commands[1:])
                     await page.mouse.move(x, y)
-                    # force_screenshot = True
+                    await _repaint()
                 elif command_id == 'click':
                     x, y = map(int, commands[1:-1])
                     mouse_button = commands[-1]
                     await page.mouse.click(x, y, options={'button': mouse_button})
+                    await _repaint()
                 elif command_id == 'resize':
                     width, height = map(int, commands[1:])
                     await page.setViewport({"width": width, "height": height})
-                    # force_screenshot = True
+                    await _repaint()
                 elif command_id == 'scroll':
                     scroll_value: str = commands[-1]
                     await page.evaluate("{window.scrollBy(0," + scroll_value + ");}")
-                    # force_screenshot = True
+                    await _repaint()
 
     async def _take_screenshots(writer, page):
         last_screenshot = time()
@@ -233,26 +241,10 @@ async def tcp_client():
 
         while True:
             if (time() - last_screenshot) > refresh_time:
-                # await page.screenshot({'path': RENDER_PATH})
-                # result = await page._client.send('Page.captureScreenshot', {'format': 'png'})
-                # if encoding == 'base64':
-                #     buffer = result.get('data', b'')
-                # else:
-                #     buffer = base64.b64decode(result.get('data', b''))
                 if texture_data_queue.qsize() == 0:
-                    screenshot = await page.screenshot({'encoding': 'binary'})
+                    screenshot = await page.screenshot({'encoding': 'binary'}) # , 'omitBackground': True})
                     ### print("_take_screenshots:: screenshot")
                     texture_data_queue.put_nowait(screenshot)
-
-                # Websockets implementation.
-                ### screenshot = await page.screenshot({'encoding': 'base64'})
-                ### print("Screenshot:", screenshot)
-                ### width, height = page.viewport['width'], page.viewport['height']
-                ### print(len(screenshot), width*height)
-                ### # Send the width and height of the screenshot as 4-byte integers
-                ### writer.write(struct.pack('!II', width, height))
-                ### # Send the screenshot data
-                ### writer.write(screenshot.encode()) # struct.pack(f'!{width*height*4}I', screenshot))
                 last_screenshot = time()
 
     # Create tasks for handling data and taking screenshots
@@ -273,6 +265,15 @@ async def tcp_client():
         task_1.cancel() # set_exception()
         task_2.cancel() # set_exception()
         writer.close()
+
+    global SHM
+    global TEXTURE_BUFFER
+
+    SHM.close()
+    del SHM
+    del TEXTURE_BUFFER
+
+    await browser.close()
 
     texture_data_queue.put('SHUTDOWN')
     t.join()

@@ -22,12 +22,12 @@ bl_info = {
     "category" : "Interface"
 }
 
-from .ackit import auto_load
+from . import auto_load
 
-auto_load.init()
+auto_load.init_addon()
 
 def register():
-    auto_load.register()
+    auto_load.register_addon()
 
 def unregister():
-    auto_load.unregister()
+    auto_load.unregister_addon()

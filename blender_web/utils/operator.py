@@ -1,5 +1,7 @@
 from dataclasses import dataclass
 
+from .event import GEvent
+
 
 class OpsReturn:
     FINISH = {'FINISHED'}
@@ -14,3 +16,15 @@ def add_modal_handler(context, operator):
         print("WARN! Operator failed to add modal handler!")
         return OpsReturn.CANCEL
     return OpsReturn.RUN
+
+
+@dataclass
+class ModalEventTrigger:
+    type: str
+    value: str
+    ctrl: bool | None = None
+    alt: bool | None = None
+    shift: bool | None = None
+
+    def test_event(self) -> bool:
+        return GEvent.check(self.type, self.value, shift=self.shift, alt=self.alt, ctrl=self.ctrl)

@@ -7,6 +7,7 @@ def RegisterGZ(supported_spaces: set[str], use_singleton: bool = True):
         from .gzg import BWS_BaseGZG
         from .km import BWS_GZGKM
         gz_type = type(
+            f"BWS_GZ_{cls.__name__}",
             (BWS_BaseGZ,),
             {
                 'bl_idname': f"BWS_GZ_{cls.__name__.lower()}",
@@ -17,6 +18,7 @@ def RegisterGZ(supported_spaces: set[str], use_singleton: bool = True):
         _types.append(gz_type)
         for space_type in supported_spaces:
             gzg_type = type(
+                f"BWS_GZG_{cls.__name__}_{space_type}",
                 (BWS_BaseGZG, BWS_GZGKM),
                 {
                     'bl_idname': f"BWS_GZG_{cls.__name__.lower()}_{space_type.lower()}",

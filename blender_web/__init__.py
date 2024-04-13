@@ -22,7 +22,7 @@ bl_info = {
     "category" : "Interface"
 }
 
-from . import auto_load
+from .ackit import auto_load
 
 auto_load.init()
 

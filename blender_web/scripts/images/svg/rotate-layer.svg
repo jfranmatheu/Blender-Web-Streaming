@@ -103,11 +103,11 @@
     </g>
     <g transform="translate(0 0.000001)">
         <path id="eSUYK5m46Cc6" d="M22.254454,10.818187c0-4.483301-1.566506-6.280176-7.956234-6.234103"
-            transform="translate(-.046073-.952194)" fill="none" stroke="#7a8ff7" stroke-width="1.5"
+            transform="translate(-.046073-.952194)" fill="none" stroke="#668ffb" stroke-width="1.5"
             stroke-linecap="round" stroke-dasharray="12"></path>
         <polygon id="eSUYK5m46Cc7"
             points="4.935889,0.125333 1.995051,1.774578 1.995052,-2.004946 4.935889,0.125333"
-            transform="matrix(-1 0 0-1 17.012321 3.515967)" fill="#7a8ff7" stroke="#7a8ff7"
+            transform="matrix(-1 0 0-1 17.012321 3.515967)" fill="#668ffb" stroke="#668ffb"
             stroke-linejoin="round"></polygon>
     </g>
 </svg>

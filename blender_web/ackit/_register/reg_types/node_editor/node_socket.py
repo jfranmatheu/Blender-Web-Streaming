@@ -1,0 +1,4 @@
+
+
+class NodeSocket:
+    pass

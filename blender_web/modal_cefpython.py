@@ -9,7 +9,6 @@ import struct
 import numpy as np
 from os import path
 from string import ascii_letters, digits as ascii_digits, ascii_uppercase
-import struct
 
 import bpy
 import gpu

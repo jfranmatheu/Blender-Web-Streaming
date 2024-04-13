@@ -1,0 +1,113 @@
+<svg id="eSUYK5m46Cc1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
+    viewBox="0 0 24 24" shape-rendering="geometricPrecision" text-rendering="geometricPrecision">
+    <style>
+        #eSUYK5m46Cc2_tr {
+          animation: eSUYK5m46Cc2_tr__tr 500ms linear 1 normal forwards
+        }
+      
+        #eSUYK5m46Cc6 {
+          animation: eSUYK5m46Cc6_c_o 500ms linear 1 normal forwards
+        }
+      
+        #eSUYK5m46Cc7 {
+          animation: eSUYK5m46Cc7_c_o 500ms linear 1 normal forwards
+        }
+      
+        @keyframes eSUYK5m46Cc2_tr__tr {
+          0% {
+            transform: translate(1.927498px, 22.13342px) rotate(0deg)
+          }
+      
+          12% {
+            transform: translate(1.927498px, 22.13342px) rotate(0deg);
+            animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1)
+          }
+      
+          38% {
+            transform:
+              translate(1.927498px, 22.13342px) rotate(-7.5deg);
+            animation-timing-function:
+              cubic-bezier(0.42, 0, 1, 1)
+          }
+      
+          54% {
+            transform: translate(1.927498px, 22.13342px) rotate(-7deg);
+            animation-timing-function: cubic-bezier(0, 0, 0.58, 1)
+          }
+      
+          72% {
+            transform:
+              translate(1.927498px, 22.13342px) rotate(0deg);
+            animation-timing-function:
+              cubic-bezier(0.42, 0, 0.58, 1)
+          }
+      
+          88% {
+            transform: translate(1.927498px, 22.13342px) rotate(-2.1deg);
+            animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1)
+          }
+      
+          100% {
+            transform:
+              translate(1.927498px, 22.13342px) rotate(0deg)
+          }
+        }
+      
+        @keyframes eSUYK5m46Cc6_c_o {
+          0% {
+            stroke-dashoffset: 0;
+          }
+          6% {
+            stroke-dashoffset: 10;
+            stroke-width: 0;
+          }
+          40% {
+            stroke-dashoffset: 0;
+            stroke-width: 1.5;
+          }
+        }
+        @keyframes eSUYK5m46Cc7_c_o {
+          0% {
+            opacity: 1
+          }
+      
+          6% {
+            opacity: 0
+          }
+      
+          34% {
+            opacity: 0;
+            animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1)
+          }
+      
+          42% {
+            opacity: 1
+          }
+      
+          100% {
+            opacity: 1
+          }
+        }
+      </style>
+
+
+    <g id="eSUYK5m46Cc2_tr" transform="translate(1.927498,22.13342) rotate(0)">
+        <g transform="scale(-0.63,0.63) translate(-24.090137,-22.907379)">
+            <path
+                d="M19,0L1.580276,0c-2.760053.003306-4.996694,2.239947-5,5v12.456683c.003306,2.760053,2.239947,4.996694,5,5h17.419724c2.760053-.003306,4.996694-2.239947,5-5L24,5c-.003306-2.760053-2.239947-4.996694-5-5ZM1.580276,2L19,2c1.656854,0,3,1.343146,3,3v12.456683c-.001725.445487-.104289.884802-.3,1.285L12.537,11.122c-.93772-.937967-2.209689-1.464932-3.536-1.464932s-2.981635.526965-3.919355,1.464932l-6.501369,4.791683v-10.913683c0-1.656854,1.343146-3,3-3Zm0,18.456683c-1.656854,0-3-1.343146-3-3v1.285L6.494645,12.536C7.057309,11.972975,8.204017,11.65664,9,11.65664s1.559336.316335,2.122.87936l9.163,7.620683c-.400198.195711-.839513.298275-1.285.3h-17.419724Z"
+                transform="translate(.09014 0.450702)" fill="#ddd"></path>
+            <path
+                d="M16,10.5c1.932997,0,3.5-1.567003,3.5-3.5s-1.567003-3.5-3.5-3.5-3.5,1.567003-3.5,3.5s1.567003,3.5,3.5,3.5Zm0-5c.828427,0,1.5.671573,1.5,1.5s-.671573,1.5-1.5,1.5-1.5-.671573-1.5-1.5.671573-1.5,1.5-1.5Z"
+                fill="#ddd"></path>
+        </g>
+    </g>
+    <g transform="translate(0 0.000001)">
+        <path id="eSUYK5m46Cc6" d="M22.254454,10.818187c0-4.483301-1.566506-6.280176-7.956234-6.234103"
+            transform="translate(-.046073-.952194)" fill="none" stroke="#7a8ff7" stroke-width="1.5"
+            stroke-linecap="round" stroke-dasharray="12"></path>
+        <polygon id="eSUYK5m46Cc7"
+            points="4.935889,0.125333 1.995051,1.774578 1.995052,-2.004946 4.935889,0.125333"
+            transform="matrix(-1 0 0-1 17.012321 3.515967)" fill="#7a8ff7" stroke="#7a8ff7"
+            stroke-linejoin="round"></polygon>
+    </g>
+</svg>

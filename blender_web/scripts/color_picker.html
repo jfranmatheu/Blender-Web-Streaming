@@ -1,367 +1,613 @@
 <html>
 
 <style>
+  @import url("https://fonts.googleapis.com/css?family=Roboto|Roboto+Mono&display=swap");
 
-    @import url("https://fonts.googleapis.com/css?family=Roboto|Roboto+Mono&display=swap");
-    [data-preview] {
-      height: 10rem;
-      margin-bottom: 0.5rem;
-      border-radius: var(--border-radius);
-    }
-    [data-preview]::before {
-      border-right: 15rem solid white;
-    }
-    [data-color-form] {
-      width: 30rem;
-      margin-right: 2rem;
-    }
-    [data-color-form] .row {
-      margin-bottom: 10px;
-      line-height: 1.5;
-    }
-    [data-control-type="sliders"] {
-      border: none;
-      padding: 0;
-      margin-top: 2rem;
-    }
-    [data-control-type="sliders"] .slider-control {
-      position: relative;
-      display: flex;
-      align-items: center;
-    }
-    [data-control-type="sliders"] label {
-      width: 2rem;
-      display: inline-block;
-    }
-    [data-control-type="sliders"] .unit {
-      padding-left: 0.3rem;
-    }
-    [data-control-type="sliders"] input {
-      border-radius: var(--border-radius);
-    }
-    [data-control-type="sliders"] input[type="number"] {
-      font-family: var(--regular-font);
-      height: 2.2rem;
-      width: calc(5ch + 1.7rem);
-      margin-left: 1rem;
-      text-align: right;
-      position: relative;
-    }
-    [data-control-type="sliders"] input[type="number"]::-webkit-inner-spin-button {
-      opacity: 1;
-    }
-    [data-control-type="sliders"] input[type="range"] {
-      flex-grow: 2;
-      appearance: none;
-      -webkit-appearance: none;
-      background: none;
-      height: 0.6rem;
-      padding: 0;
-      outline: none;
-    }
-    [data-control-type="sliders"] input[type="range"][data-channel="cyan"] {
-      background: #0ff;
-    }
-    [data-control-type="sliders"] input[type="range"][data-channel="magenta"] {
-      background: #f0f;
-    }
-    [data-control-type="sliders"] input[type="range"][data-channel="yellow"] {
-      background: #ff0;
-    }
-    [data-control-type="sliders"] input[type="range"][data-channel="key"] {
-      background: #000;
-    }
-    [data-control-type="sliders"] input[type="range"][data-channel="alpha"] {
-      z-index: 3;
-    }
-    .alpha-bg {
-      position: relative;
-      border: none;
-    }
-    .alpha-bg::before {
-      content: "";
-      display: block;
-      z-index: -1;
-      width: calc(100% - 0.2rem);
-      height: calc(100% - 0.2rem);
-      position: absolute;
-      left: 0.1rem;
-      top: 0.1rem;
-      border-radius: inherit;
-      background: var(--transparency-bg);
-      background-size: 1rem;
-    }
-    .alpha-bg::after {
-      content: "";
-      display: block;
-      z-index: -1;
-      width: 100%;
-      height: 100%;
-      position: absolute;
-      border: 1px var(--border-color) solid;
-      border-radius: inherit;
-      background: inherit;
-    }
-    main {
-      display: flex;
-      height: 100vh;
-      padding: 2rem;
-      align-items: center;
-      justify-content: center;
-    }
-    /* basic styling */
-    body {
-      background: #1d1e22;
-      color: white;
-      font: 16px sans-serif;
-    }
-    td {
-      padding: 2rem 1rem;
-    }
-    caption {
-      text-align: left;
-      padding: 2rem 1rem;
-    }
-    :root {
-      --background-color: #1c1d21;
-      --text-color: #d9d9d9;
-      --border-color: #2f3137;
-      --transparency-bg: url(data:image/gif;base64,R0lGODlhDAAMAHAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQICgAAACwAAAAADAAMAIDX19f///8CFoQfqYeabNyDMkBQb81Uat85nxguUAEAOw==);
-      --border-radius: 0.3rem;
-      --regular-font: Roboto, sans-serif;
-      --monospace-font: "Roboto Mono", monospace;
-      --form-field-bg: #f2f2f2;
-      --form-field-color: #1c1d21;
-      --link-color: #0d80d9;
-    }
-    html {
-      font-size: 62.5%;
-      box-sizing: border-box;
-    }
-    a {
-      color: var(--link-color);
-    }
-    *, *:before, *:after {
-      box-sizing: inherit;
-    }
-    body {
-      font: 1.4rem/1.5 var(--regular-font);
-      background: var(--background-color);
-      color: var(--text-color);
-      margin: 0;
-    }
-    h1 {
-      font-size: 2.4rem;
-    }
-    input, textarea, pre, select, [data-preview] {
-      background: var(--form-field-bg);
-      color: var(--form-field-color);
-    }
-    code, input, textarea, pre, select, [data-preview] {
-      font-family: var(--monospace-font);
-    }
-    input, textarea, pre, select, fieldset, [data-preview] {
-      border: 0.1rem var(--border-color) solid;
-    }
-    pre {
-      color: #262626;
-      background: #d9d9d9;
-      padding: 1rem;
-      max-height: calc(100vh - 40px);
-      overflow: auto;
-    }
+  :root {
+    --background-color: #1c1d21;
+    --text-color: #d9d9d9;
+    --border-color: #2f3137;
+    --transparency-bg: url(data:image/gif;base64,R0lGODlhDAAMAHAAACH/C05FVFNDQVBFMi4wAwEAAAAh+QQICgAAACwAAAAADAAMAIDX19f///8CFoQfqYeabNyDMkBQb81Uat85nxguUAEAOw==);
+    --border-radius: 0.6rem;
+    --regular-font: Roboto, sans-serif;
+    --monospace-font: "Roboto Mono", monospace;
+    --form-field-bg: #f2f2f2;
+    --form-field-color: #1c1d21;
+    --link-color: #0d80d9;
+  }
 
+  html {
+    font-size: 62.5%;
+    box-sizing: border-box;
+  }
+
+  /* basic styling */
+  body {
+    background-color: #1A1917;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: Inter, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font: 1.4rem/1.5 var(--regular-font);
+    /*/background: var(--background-color);*/
+    color: var(--text-color);
+    margin: 0;
+  }
+
+  [data-preview] {
+    height: 10rem;
+    margin-bottom: 0.5rem;
+    border-radius: var(--border-radius);
+  }
+
+  [data-preview]::before {
+    border-right: 15rem solid white;
+  }
+
+  [data-color-form] {
+    width: 30rem;
+    margin-right: 2rem;
+  }
+
+  [data-color-form] .row {
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  [data-control-type="sliders"] {
+    border: none;
+    padding: 0;
+    margin-top: 2rem;
+  }
+
+  [data-control-type="sliders"] .slider-control {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  [data-control-type="sliders"] label {
+    width: 2rem;
+    display: inline-block;
+  }
+
+  [data-control-type="sliders"] .unit {
+    padding-left: 0.3rem;
+  }
+
+  [data-control-type="sliders"] input {
+    border-radius: var(--border-radius);
+  }
+
+  [data-control-type="sliders"] input[type="number"] {
+    font-family: var(--regular-font);
+    height: 2.2rem;
+    width: calc(5ch + 1.7rem);
+    margin-left: 1rem;
+    text-align: right;
+    position: relative;
+  }
+
+  [data-control-type="sliders"] input[type="number"]::-webkit-inner-spin-button {
+    opacity: 1;
+  }
+
+  [data-control-type="sliders"] input[type="range"] {
+    flex-grow: 2;
+    appearance: none;
+    -webkit-appearance: none;
+    background: none;
+    height: 0.6rem;
+    padding: 0;
+    outline: none;
+  }
+
+  [data-control-type="sliders"] input[type="range"][data-channel="cyan"] {
+    background: #0ff;
+  }
+
+  [data-control-type="sliders"] input[type="range"][data-channel="magenta"] {
+    background: #f0f;
+  }
+
+  [data-control-type="sliders"] input[type="range"][data-channel="yellow"] {
+    background: #ff0;
+  }
+
+  [data-control-type="sliders"] input[type="range"][data-channel="key"] {
+    background: #000;
+  }
+
+  [data-control-type="sliders"] input[type="range"][data-channel="alpha"] {
+    z-index: 3;
+  }
+
+  #sliders-cymk input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 2rem;
+    height: 1rem;
+    border-radius: 30%;
+    background: whitesmoke;
+    cursor: pointer;
+  }
+
+  #sliders-cymk input::-moz-range-thumb {
+    width: 25px;
+    height: 25px;
+    border-radius: 30%;
+    background: whitesmoke;
+    cursor: pointer;
+  }
+
+  .alpha-bg {
+    position: relative;
+    border: none;
+  }
+
+  .alpha-bg::before {
+    content: "";
+    display: block;
+    z-index: -1;
+    width: calc(100% - 0.2rem);
+    height: calc(100% - 0.2rem);
+    position: absolute;
+    left: 0.1rem;
+    top: 0.1rem;
+    border-radius: inherit;
+    background: var(--transparency-bg);
+    background-size: 1rem;
+  }
+
+  .alpha-bg::after {
+    content: "";
+    display: block;
+    z-index: -1;
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    border: 1px var(--border-color) solid;
+    border-radius: inherit;
+    background: inherit;
+  }
+
+  main {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    padding: 2rem;
+    align-items: center;
+    justify-content: center;
+  }
+
+  td {
+    padding: 2rem 1rem;
+  }
+
+  caption {
+    text-align: left;
+    padding: 2rem 1rem;
+  }
+
+  a {
+    color: var(--link-color);
+  }
+
+  *,
+  *:before,
+  *:after {
+    box-sizing: inherit;
+  }
+
+  h1 {
+    font-size: 2.4rem;
+  }
+
+  input,
+  textarea,
+  pre,
+  select,
+  [data-preview] {
+    background: var(--form-field-bg);
+    color: var(--form-field-color);
+  }
+
+  code,
+  input,
+  textarea,
+  pre,
+  select,
+  [data-preview] {
+    font-family: var(--monospace-font);
+  }
+
+  input,
+  textarea,
+  pre,
+  select,
+  fieldset,
+  [data-preview] {
+    border: 0.1rem var(--border-color) solid;
+  }
+
+  pre {
+    color: #262626;
+    background: #d9d9d9;
+    padding: 1rem;
+    max-height: calc(100vh - 40px);
+    overflow: auto;
+  }
+
+  /* MENU */
+  /*****************************************************************/
+  .menu-wrapper {
+    position: relative;
+    width: 210px;
+    background: #2A2A27;
+    box-shadow: 0px 0px 0px 2px rgba(0, 0, 0, 0.15), 0px 68px 27px rgba(0, 0, 0, 0.04), 0px 38px 23px rgba(0, 0, 0, 0.13), 0px 17px 17px rgba(0, 0, 0, 0.22), 0px 4px 9px rgba(0, 0, 0, 0.26);
+    border-radius: 8px;
+    padding: 4pt;
+    list-style: none;
+  }
+
+  .menu-wrapper::after {
+    /* gradient border */
+    content: '';
+    position: absolute;
+    z-index: 1;
+    inset: 0;
+    background: linear-gradient(135deg, hsla(0, 0%, 100%, 0.1), hsla(0, 0%, 100%, 0)) border-box;
+    mask: linear-gradient(black, black) padding-box, linear-gradient(black, black);
+    mask-composite: exclude;
+    border-radius: inherit;
+    border: 1px solid transparent;
+    pointer-events: none;
+  }
+
+  .menu {
+    --btn-height: 36px;
+    list-style: none;
+    position: relative;
+    padding: 0;
+    margin: 0;
+  }
+
+  .menu-btn {
+    height: var(--btn-height);
+    border-radius: 6px;
+    display: flex;
+    gap: 8px;
+    width: 100%;
+    align-items: center;
+    padding: 0 10px 0 6px;
+    font-size: 1rem;
+    font-weight: 500;
+    color: #DFDFDC;
+    position: relative;
+    z-index: 1;
+    user-select: none;
+    background-color: transparent;
+    border: none;
+  }
+
+  .menu-btn:not(:hover)>object {
+    filter: grayscale();
+  }
+
+  .menu-btn:focus-visible {
+    outline: 1.5px solid #7A8FF7;
+  }
+
+  .menu-hotkey {
+    color: #5E5E55;
+    margin-left: auto;
+  }
+
+  .menu-btn:hover .menu-hotkey {
+    color: #bbbbbb;
+  }
+
+  .menu-marker {
+    background: #353531;
+    border-radius: 6px;
+    width: 100%;
+    position: absolute;
+    top: var(--marker-top, 0px);
+    left: 0;
+    height: 34px;
+    opacity: 0;
+    scale: 0.75;
+    transition: opacity .1s, scale .1s;
+    transition: top 0s .1s, opacity .1s, scale .1s, translate .1s;
+  }
+
+  .menu-btn:hover {
+    background: #3D3D38;
+  }
+
+  .menu-icon {
+    font-size: 24px;
+    height: 1em;
+    width: 1em;
+    display: inline-block;
+    line-height: 1;
+    flex-shrink: 0;
+    max-width: initial;
+  }
 </style>
 
 
 <head> </head>
 <main>
-    <form autocomplete="off" data-color-form>
-      <div class="row">
-        <div data-preview class="alpha-bg"></div>
-        Current color: <code data-current-rgb></code>
+  <form autocomplete="off" data-color-form>
+    <div class="row">
+      <div data-preview class="alpha-bg"></div>
+      Current color: <code data-current-rgb></code>
+    </div>
+    <fieldset id="sliders-cymk" data-control="cymk" data-control-type="sliders">
+      <div class="row slider-control">
+        <label for="cymk-cyan">C</label>
+        <input min="0" max="100" step="0.5" type="range" data-channel="cyan" />
+        <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-cyan" />
+        <span class="unit">%</span>
       </div>
-      <fieldset data-control="cymk" data-control-type="sliders">
-        <div class="row slider-control">
-          <label for="cymk-cyan">C</label>
-          <input min="0" max="100" step="0.5" type="range" data-channel="cyan" />
-          <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-cyan" />
-          <span class="unit">%</span>
-        </div>
-        <div class="row slider-control">
-          <label for="cymk-magenta">M</label>
-          <input min="0" max="100" step="0.5" type="range" data-channel="magenta" />
-          <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-magenta" />
-          <span class="unit">%</span>
-        </div>
-        <div class="row slider-control">
-          <label for="cymk-yellow">Y</label>
-          <input min="0" max="100" step="0.5" type="range" data-channel="yellow" />
-          <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-yellow" />
-          <span class="unit">%</span>
-        </div>
-        <div class="row slider-control">
-          <label for="cymk-key">K</label>
-          <input min="0" max="100" step="0.5" type="range" data-channel="key" />
-          <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-key" />
-          <span class="unit">%</span>
-        </div>
-        <div class="row slider-control">
-          <label for="cymk-alpha">A</label>
-          <input min="0" max="100" step="0.5" type="range" data-channel="alpha" class="alpha-bg" />
-          <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-alpha" />
-          <span class="unit">%</span>
-        </div>
-        CYMK with alpha channel
-      </fieldset>
-    </form>
-  </main>
+      <div class="row slider-control">
+        <label for="cymk-magenta">M</label>
+        <input min="0" max="100" step="0.5" type="range" data-channel="magenta" />
+        <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-magenta" />
+        <span class="unit">%</span>
+      </div>
+      <div class="row slider-control">
+        <label for="cymk-yellow">Y</label>
+        <input min="0" max="100" step="0.5" type="range" data-channel="yellow" />
+        <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-yellow" />
+        <span class="unit">%</span>
+      </div>
+      <div class="row slider-control">
+        <label for="cymk-key">K</label>
+        <input min="0" max="100" step="0.5" type="range" data-channel="key" />
+        <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-key" />
+        <span class="unit">%</span>
+      </div>
+      <div class="row slider-control">
+        <label for="cymk-alpha">A</label>
+        <input min="0" max="100" step="0.5" type="range" data-channel="alpha" class="alpha-bg" />
+        <input min="0" max="100" step="0.5" type="number" value="50" id="cymk-alpha" />
+        <span class="unit">%</span>
+      </div>
+      CYMK with alpha channel
+    </fieldset>
+  </form>
+
+  <div class="menu-wrapper">
+    <menu class="menu">
+      <li>
+        <button class="menu-btn">
+          <object class="menu-icon" data="images/svg/rotate-layer.svg" type="image/svg+xml"></object>
+          <span>Rotate Layer</span>
+          <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>R</span>
+        </button>
+      </li>
+
+      <li>
+        <button class="menu-btn">
+          <object class="menu-icon" data="images/svg/bring-to-front.svg" type="image/svg+xml"></object>
+          <span>Bring to Front</span>
+          <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>]</span>
+        </button>
+      </li>
+
+      <li>
+        <button class="menu-btn">
+          <object class="menu-icon" data="images/svg/replace-layer.svg" type="image/svg+xml"></object>
+          <span>Replace Layer</span>
+          <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>⇧R</span>
+        </button>
+      </li>
+
+      <li>
+        <button class="menu-btn">
+          <object class="menu-icon" data="images/svg/bring-to-front.svg" type="image/svg+xml"></object>
+          <span>Open Prototype</span>
+          <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>⇧P</span>
+        </button>
+      </li>
+
+      <li>
+        <button class="menu-btn">
+          <object class="menu-icon" data="images/svg/bring-to-front.svg" type="image/svg+xml"></object>
+          <!--<canvas class="menu-icon js-riv-canvas" role="img" width="24" height="24"></canvas>-->
+          <span>View Hotkeys</span>
+          <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>⇧H</span>
+        </button>
+      </li>
+
+      <li class="menu-marker" aria-hidden="true"></li>
+    </menu>
+  </div>
+
+</main>
 
 
-  <script>
-    // the preview field
-    const container = document.querySelector("[data-color-form]");
-    const preview = container.querySelector("[data-preview]");
+<script>
+  let controlledInputSlider = null;
+  let isDragging = false;
 
-    // sliders and number fields
-    const cmykInputs = container.querySelectorAll('[data-control="cymk"] input');
-    const alphaSlider = Array.from(cmykInputs).find(input => {
+  // the preview field
+  const container = document.querySelector("[data-color-form]");
+  const preview = container.querySelector("[data-preview]");
+
+  // sliders and number fields
+  const cmykInputs = container.querySelectorAll('[data-control="cymk"] input');
+  const alphaSlider = Array.from(cmykInputs).find(input => {
     return input.type === 'range' && input.dataset.channel === 'alpha';
-    });
+  });
 
-    cmykInputs.forEach(input => {
+  cmykInputs.forEach(input => {
     input.addEventListener("input", e => {
-        syncSlider(e.target);
-        init();
+      syncSlider(e.target);
+      init();
     });
+    input.addEventListener("mousedown", e => {
+      isDragging = true;
     });
+  });
 
-    const init = () => {  
-        const cmyk = getCmykObj();
-        const rgb = cymkToRgbObj(cmyk);
-        updatePreview(rgb);
-        updateAlpha(rgb);
-    }
+  const init = () => {
+    const cmyk = getCmykObj();
+    const rgb = cymkToRgbObj(cmyk);
+    updatePreview(rgb);
+    updateAlpha(rgb);
+  }
 
-    const getCmykObj = () => {
+  const getCmykObj = () => {
     let cmyk = {};
     cmykInputs.forEach(range => {
-        // sliders only
-        if (range.dataset.channel) {
+      // sliders only
+      if (range.dataset.channel) {
         const value = range.dataset.channel === 'alpha' ? parseFloat(range.value) / 100 : parseFloat(range.value)
         cmyk[range.dataset.channel] = value;
-        }
+      }
     });
     return cmyk;
-    };
+  };
 
-    /**
-    * Synchronize slider and number field
-    *
-    * @param {HTMLElement} field
-    * @returns {boolean}
-    */
-    const syncSlider = field => {
+  /**
+  * Synchronize slider and number field
+  *
+  * @param {HTMLElement} field
+  * @returns {boolean}
+  */
+  const syncSlider = field => {
     const partner =
-        field.type === "range"
+      field.type === "range"
         ? field.nextElementSibling
         : field.previousElementSibling;
     partner.value = field.value;
     return true;
-    };
+  };
 
-    /**
-    * Update the preview field
-    *
-    * @property {object} rgb
-    * @property {number} rgb.red
-    * @property {number} rgb.green
-    * @property {number} rgb.blue
-    * @property {number} rgb.alpha
-    */
-    const updatePreview = rgb => {
+  /**
+  * Update the preview field
+  *
+  * @property {object} rgb
+  * @property {number} rgb.red
+  * @property {number} rgb.green
+  * @property {number} rgb.blue
+  * @property {number} rgb.alpha
+  */
+  const updatePreview = rgb => {
     preview.style.backgroundColor = rgbToCss(rgb, false, false);
     preview.nextElementSibling.textContent = rgbToCss(rgb, true, false);
-    };
+  };
 
-    /**
-    * Update the preview field
-    *
-    * @property {object} rgb
-    * @property {number} rgb.red
-    * @property {number} rgb.green
-    * @property {number} rgb.blue
-    * @property {number} rgb.alpha
-    */
-    const updateAlpha = rgb => {
+  /**
+  * Update the preview field
+  *
+  * @property {object} rgb
+  * @property {number} rgb.red
+  * @property {number} rgb.green
+  * @property {number} rgb.blue
+  * @property {number} rgb.alpha
+  */
+  const updateAlpha = rgb => {
     alphaSlider.style.background = rgbToGradient(rgb);
-    };
+  };
 
-    /**
-    * Convert CYMK object to RGB CSS string
-    *
-    * @property {object} cymk
-    * @property {number} cymk.cyan
-    * @property {number} cymk.magenta
-    * @property {number} cymk.yellow
-    * @property {number} cymk.key
-    * @property {number} cymk.alpha
-    *
-    * returns {object}
-    */
-    const cymkToRgbObj = cmyk => {
+  /**
+  * Convert CYMK object to RGB CSS string
+  *
+  * @property {object} cymk
+  * @property {number} cymk.cyan
+  * @property {number} cymk.magenta
+  * @property {number} cymk.yellow
+  * @property {number} cymk.key
+  * @property {number} cymk.alpha
+  *
+  * returns {object}
+  */
+  const cymkToRgbObj = cmyk => {
     const factor = 255 * (1 - cmyk.key / 100);
     return {
-        red: (1 - cmyk.cyan / 100) * factor,
-        green: (1 - cmyk.magenta / 100) * factor,
-        blue: (1 - cmyk.yellow / 100) * factor,
-        alpha: cmyk.alpha
+      red: (1 - cmyk.cyan / 100) * factor,
+      green: (1 - cmyk.magenta / 100) * factor,
+      blue: (1 - cmyk.yellow / 100) * factor,
+      alpha: cmyk.alpha
     };
-    };
+  };
 
-    /**
-    * Build the RGB CSS string
-    *
-    * @property {object} rgb
-    * @property {number} rgb.red
-    * @property {number} rgb.green
-    * @property {number} rgb.blue
-    * @property {number} rgb.alpha
-    * @param {boolean} forDisplay - rounds the value to one decimal point
-    *
-    * @returns {string}
-    */
-    const rgbToCss = (rgb, forDisplay, forGradient) => {
+  /**
+  * Build the RGB CSS string
+  *
+  * @property {object} rgb
+  * @property {number} rgb.red
+  * @property {number} rgb.green
+  * @property {number} rgb.blue
+  * @property {number} rgb.alpha
+  * @param {boolean} forDisplay - rounds the value to one decimal point
+  *
+  * @returns {string}
+  */
+  const rgbToCss = (rgb, forDisplay, forGradient) => {
     let values = Object.values(rgb);
     const alpha = rgb.alpha;
     values.pop();
-    if(forDisplay){
-        values = values.map(value => {
+    if (forDisplay) {
+      values = values.map(value => {
         return !Number.isInteger(value) ? Math.round(value) : value;
-        });
+      });
     }
-    if(!forGradient) {
-        values.push(alpha);
+    if (!forGradient) {
+      values.push(alpha);
     }
-    
+
     return `rgb(${values.join(", ")})`;
-    }
+  }
 
-    /**
-    * Build the background for the alpha slider
-    *
-    * @property {object} rgb
-    * @property {number} rgb.red
-    * @property {number} rgb.green
-    * @property {number} rgb.blue
-    * @property {number} rgb.alpha
-    *
-    * @returns {string}
-    */
-    const rgbToGradient = rgb => {
+  /**
+  * Build the background for the alpha slider
+  *
+  * @property {object} rgb
+  * @property {number} rgb.red
+  * @property {number} rgb.green
+  * @property {number} rgb.blue
+  * @property {number} rgb.alpha
+  *
+  * @returns {string}
+  */
+  const rgbToGradient = rgb => {
     return `linear-gradient(to right, transparent, ${rgbToCss(rgb, false, true)})`;
-    }
+  }
 
-    init();
-  </script>
+  init();
+</script>
+
+<script>
+  // Select all elements with the class 'menu-btn'
+  let menuBtns = document.querySelectorAll('.menu-btn');
+
+  // Apply the listener to each button
+  menuBtns.forEach(btn => {
+    btn.addEventListener('mouseenter', function () {
+      let svgObject = btn.querySelector('object');
+      let svgData = svgObject.data; // Save the SVG data
+
+      // Remove the SVG object
+      svgObject.parentNode.removeChild(svgObject);
+
+      // Create a new SVG object
+      let newSvgObject = document.createElement('object');
+      newSvgObject.data = svgData;
+      newSvgObject.type = 'image/svg+xml';
+      newSvgObject.classList.add('menu-icon');
+
+      // Add the new SVG object to the button
+      btn.prepend(newSvgObject);
+    });
+  });
+</script>
+
 </html>

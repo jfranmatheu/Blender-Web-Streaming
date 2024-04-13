@@ -1,4 +1,3 @@
-
 class BWS_BaseGZ:
     data_type = None
     _data_instance = None

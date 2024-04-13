@@ -5,6 +5,7 @@ from .reg_timer import new_timer_as_decorator
 from .reg_handlers import Handlers
 from .reg_ops import OpsDecorators
 from .reg_ui_override import ui_override
+from .gz import RegisterGZ
 
 
 class RegDeco:
@@ -15,3 +16,4 @@ class RegDeco:
     UI_APPEND = UIAppend
     UI_OVERRIDE = ui_override
     OPS = OpsDecorators
+    GZ = RegisterGZ

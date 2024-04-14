@@ -1,4 +1,14 @@
-class BWS_BaseGZ:
+#from ...reg_types import BaseType
+
+
+class BWS_BaseGZ:#(BaseType):
+
+    # @classmethod
+    # def tag_register(cls):
+    #     return super().tag_register('Gizmo', 'GZ')
+
+    # ----------------------------------------------------------------
+
     data_type = None
     _data_instance = None
     _gz_instance = None

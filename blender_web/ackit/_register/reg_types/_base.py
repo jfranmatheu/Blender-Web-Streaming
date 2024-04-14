@@ -16,12 +16,16 @@ class BaseType(object):
 
     @classmethod
     def __subclasses_recursive__(cls):
-        return get_subclasses_recursive(cls, only_outermost=True)
-        direct = cls.__subclasses__()
+        classes = get_subclasses_recursive(cls, only_outermost=True)
+        classes = [
+            cls for cls in classes if cls.__module__.startswith(f"{GLOBALS.ADDON_MODULE}.ackit._register.reg_")
+        ]
+        return classes
+        '''direct = cls.__subclasses__()
         indirect = []
         for subclass in direct:
             indirect.extend(subclass.__subclasses_recursive__())
-        return direct + indirect
+        return direct + indirect'''
 
     @classmethod
     def tag_register(cls, bpy_type: type | str, type_key: str | None, *subtypes, **kwargs):
@@ -29,7 +33,11 @@ class BaseType(object):
             return cls
 
         if isinstance(bpy_type, str):
-            bpy_type = getattr(bpy.types, bpy_type)
+            try:
+                bpy_type = getattr(bpy.types, bpy_type)
+            except AttributeError as e:
+                print("BPY Type not found with name:", bpy_type)
+                return None
         print_debug(f"--> Tag-Register class '{cls.__name__}' of type '{bpy_type.__name__} --> Package: {cls.__module__}'")
 
         keywords = re.findall('[A-Z][^A-Z]*', cls.__name__)

@@ -28,10 +28,12 @@ class BlenderTypes(Enum):
     NodeTree = auto()
     NodeSocket = auto()
     Node = auto()
+    Gizmo = auto()
+    GizmoGroup = auto()
 
     def get_classes(self) -> List[BaseType]:
         return classes_per_type[self]
-    
+
     def get_classes_by_module(self, module_path: str) -> List[BaseType]:
         return [cls for cls in classes_per_type[self] if module_path in cls.__module__]
 

@@ -236,7 +236,7 @@ class BWS_OT_web_navigator_pyppeteer(bpy.types.Operator):
             self.draw_frame_count = 0
             self.draw_start_time = time.time()
 
-
+'''
 def draw_op(header, context):
     bpy.app.timers.register(timer_callback, first_interval=0.1)
 
@@ -248,3 +248,4 @@ def register():
 
 def unregister():
     bpy.types.VIEW3D_HT_header.remove(draw_op)
+'''

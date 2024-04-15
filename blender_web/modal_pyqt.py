@@ -244,7 +244,7 @@ class BWS_OT_web_navigator_pyqt(bpy.types.Operator):
             self.draw_frame_count = 0
             self.draw_start_time = time.time()
 
-
+'''
 def draw_op(header, context):
     header.layout.operator('bws.web_navigator_pyqt')
 
@@ -254,3 +254,4 @@ def register():
 
 def unregister():
     bpy.types.VIEW3D_HT_header.remove(draw_op)
+'''

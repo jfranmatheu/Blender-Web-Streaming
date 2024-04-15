@@ -17,9 +17,9 @@ By default when no arguments are provided will load cefpython
 project page on Github with 5000px height.
 
 Usage:
-    python screenshot.py
-    python screenshot.py https://github.com/cztomczak/cefpython 1024 5000
-    python screenshot.py https://www.google.com/ncr 1024 768
+    python CEF
+    python CEF https://github.com/cztomczak/cefpython 1024 5000
+    python CEF https://www.google.com/ncr 1024 768
 
 Tested configurations:
 - CEF Python v57.0+
@@ -39,35 +39,89 @@ from cefpython3 import cefpython_py39 as cef
 import numpy as np
 import platform
 import sys
-import os
-import subprocess
+import socket
 from typing import Any
-from time import time
+from time import time, sleep
 from multiprocessing import shared_memory
 import threading
-import socket
 import struct
+from queue import Queue
+
 
 try:
     from PIL import Image, __version__ as PILLOW_VERSION
 except ImportError:
-    print("[screenshot.py] Error: PIL module not available. To install"
+    print("[CEF] Error: PIL module not available. To install"
           " type: pip install Pillow")
     sys.exit(1)
 
 
+DEBUG = False
+PING_INTERVAL = 5  # Time between pings
+PONG_TIMEOUT = 2  # Time to wait for a pong
+FPS = 30
+
 # Config
-URL = "https://twitter.com/Blender" # "https://github.com/cztomczak/cefpython"
+URL = "https://twitter.com/Blender"
 VIEWPORT_WIDTH = 1920
 VIEWPORT_HEIGHT = 1080
 IMAGE_CHANNELS = 4
-SCREENSHOT_PATH = os.path.join(os.path.abspath(os.path.dirname(__file__)), "screenshot.png")
 SHARED_MEMORY_ID = ''
 SERVER_PORT = 0
-SOCKET_CLIENT = None
+SOCKET_LOCK = threading.Lock()
 
 SHM = None
 TEXTURE_BUFFER = None
+BROWSER = None
+
+
+class SOCKET_SIGNAL:
+    PING = 0
+    PONG = 1
+    BUFFER_UPDATE = 2
+    KILL = 3
+
+    MOUSE_MOVE = 8
+    MOUSE_PRESS = 9
+    MOUSE_RELEASE = 10
+
+    SCROLL_UP = 16
+    SCROLL_DOWN = 17
+
+    UNICODE = 24
+
+
+class MOUSE_BUTTON:
+    LEFT = 0
+    MIDDLE = 1
+    RIGHT = 2
+
+
+class KeyEventFlags:
+    EVENTFLAG_NONE = 0
+    EVENTFLAG_CAPS_LOCK_ON = 1 << 0
+    EVENTFLAG_SHIFT_DOWN = 1 << 1
+    EVENTFLAG_CONTROL_DOWN = 1 << 2
+    EVENTFLAG_ALT_DOWN = 1 << 3
+    EVENTFLAG_LEFT_MOUSE_BUTTON = 1 << 4
+    EVENTFLAG_MIDDLE_MOUSE_BUTTON = 1 << 5
+    EVENTFLAG_RIGHT_MOUSE_BUTTON = 1 << 6
+    # Mac OS-X command key.
+    EVENTFLAG_COMMAND_DOWN = 1 << 7
+    EVENTFLAG_NUM_LOCK_ON = 1 << 8
+    EVENTFLAG_IS_KEY_PAD = 1 << 9
+    EVENTFLAG_IS_LEFT = 1 << 10
+    EVENTFLAG_IS_RIGHT = 1 << 11
+
+
+EVENT_DATA_BYTES = {
+    SOCKET_SIGNAL.MOUSE_MOVE        : 'II',    # (X, Y)
+    SOCKET_SIGNAL.MOUSE_PRESS       : 'III',  # (X, Y, MOUSE_BUTTON)
+    SOCKET_SIGNAL.MOUSE_RELEASE     : 'III',  # (X, Y, MOUSE_BUTTON)
+    SOCKET_SIGNAL.SCROLL_UP         : 'II',    # (X, Y)
+    SOCKET_SIGNAL.SCROLL_DOWN       : 'II',    # (X, Y)
+    SOCKET_SIGNAL.UNICODE           : 'II'     # (UNICODE CODE, KeyEventFlags)
+}
 
 
 ##################################################################################################
@@ -455,23 +509,158 @@ class KeyEventTypes:
 #############################################################################################
 
 
+class QueueUniqueElements:
+    def __init__(self) -> None:
+        self._ordered_items = Queue()
+        self._items_set = set()
+
+    @property
+    def qsize(self) -> int:
+        return self._ordered_items.qsize()
+
+    def __contains__(self, item) -> bool:
+        return item in self._items_set
+
+    def put(self, item, block: bool = True, timeout: float = None) -> None:
+        if item not in self._items_set:
+            self._ordered_items.put(item, block=block, timeout=timeout)
+            self._items_set.add(item)
+
+    def get(self, block: bool = True, timeout: float = None):
+        item = self._ordered_items.get(block=block, timeout=timeout)
+        self._items_set.remove(item)
+        return item
+
+
+class Client:
+    _instance = None
+
+    @classmethod
+    def get(cls, create: bool = False) -> 'Client':
+        if cls._instance is None:
+            if create:
+                global SERVER_PORT
+                cls._instance = cls('127.0.0.1', SERVER_PORT)
+        return cls._instance
+
+    def __init__(self, host, port):
+        print("[CLIENT] Create client")
+        self.host = host
+        self.port = port
+        self.connected = False
+
+    def tcp_echo_client(self):
+        ## self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        ## # self.sock.setblocking(False)
+        ## self.sock.connect((self.host, self.port))
+        ## print("[CLIENT] Connected to", self.host, self.port)
+
+        # Comienza dos hilos, uno para leer y otro para escribir
+        import threading
+        self.read_thread = threading.Thread(target=self.read_data, daemon=True)
+        self.read_thread.start()
+
+    def read_data(self):
+        global BROWSER
+        global SERVER_PORT
+        # https://realpython.com/python-sockets/
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((self.host, self.port))
+            self.sock = s
+            # s.settimeout(1.0)
+            print("[CLIENT] Connected to", self.host, self.port)
+            while self.sock is not None:
+                try:
+                    signal_raw = s.recv(4)
+                    if not signal_raw:
+                        sleep(1/FPS)
+                        continue
+                except BlockingIOError:
+                    # Resource temporarily unavailable (errno EWOULDBLOCK)
+                    sleep(1/FPS)
+                    continue
+                except socket.error as e:
+                    self.sock = None
+                    # print("[CLIENT] Some socket error! Closing client and app! BYE BYE!", e)
+                    pass
+
+                signal = int.from_bytes(signal_raw, byteorder='big')
+                print("[CLIENT] Received signal:", signal)
+
+                if signal == SOCKET_SIGNAL.PONG:
+                    if not self.pong_expected:
+                        print("[CLIENT] WTF? Not expected pong received!")
+                    self.pong_expected = False
+                    continue
+
+                if signal == SOCKET_SIGNAL.KILL:
+                    exit_app(BROWSER)
+                    return None
+
+                event_data_bytes = EVENT_DATA_BYTES.get(signal, None)
+                if event_data_bytes is None:
+                    raise ValueError("[CLIENT] Unknown event signal was received!", signal)
+
+                # self.sock.settimeout(0.1)
+                event_data_raw = s.recv(struct.calcsize(event_data_bytes))
+                # self.sock.settimeout(None)
+                if not event_data_raw:
+                    print("[CLIENT] WARN! Received empty event data!", signal)
+                    # sleep(0.1)
+                    continue
+
+                event_data = struct.unpack(event_data_bytes, event_data_raw)
+                print("[CLIENT] Received event data:", event_data)
+
+                if signal == SOCKET_SIGNAL.MOUSE_MOVE:
+                    BROWSER.SendMouseMoveEvent(*event_data, mouseLeave=False)
+
+                elif signal in {SOCKET_SIGNAL.MOUSE_PRESS, SOCKET_SIGNAL.MOUSE_RELEASE}:
+                    x, y, _mouse_type = event_data
+                    if _mouse_type == MOUSE_BUTTON.LEFT:
+                        mouse_type = 'MOUSEBUTTON_LEFT'
+                    elif _mouse_type == MOUSE_BUTTON.RIGHT:
+                        mouse_type = 'MOUSEBUTTON_RIGHT'
+                    elif _mouse_type == MOUSE_BUTTON.MIDDLE:
+                        mouse_type = 'MOUSEBUTTON_MIDDLE'
+                    else:
+                        raise ValueError("[CLIENT] Unexpected mouse type value!", _mouse_type)
+
+                    mouse_up = signal == SOCKET_SIGNAL.MOUSE_RELEASE
+                    BROWSER.SendMouseClickEvent(x=x, y=y, mouseButtonType=getattr(cef, mouse_type), mouseUp=mouse_up, clickCount=1)
+
+                elif signal in {SOCKET_SIGNAL.SCROLL_UP, SOCKET_SIGNAL.SCROLL_DOWN}:
+                    sign = 1 if signal == SOCKET_SIGNAL.SCROLL_DOWN else -1
+                    BROWSER.SendMouseWheelEvent(*event_data, deltaX=0, deltaY=sign*10)
+
+                elif signal == SOCKET_SIGNAL.UNICODE:
+                    char_code, flags = event_data
+                    key_event = {
+                        'type': KeyEventTypes.KEYEVENT_CHAR,  # KeyEventTypes.KEYEVENT_KEYDOWN if key_press==1 else KeyEventTypes.KEYEVENT_KEYUP,
+                        'windows_key_code': char_code,  # windows_vk_code
+                        'character': char_code,
+                        'focus_on_editable_field': True,
+                        'is_system_key': False,
+                        'modifiers': flags
+                    }
+                    BROWSER.SendKeyEvent(key_event)
+
+        exit_app(BROWSER)
+
+
 def main():
     check_versions()
     sys.excepthook = CEF.ExceptHook  # To shutdown all CEF processes on error
 
-    if os.path.exists(SCREENSHOT_PATH):
-        print("[screenshot.py] Remove old screenshot")
-        os.remove(SCREENSHOT_PATH)
-
     command_line_arguments()
 
-    socket_client = start_socket_client()
+    Client.get(create=True).tcp_echo_client()
 
     # Off-screen-rendering requires setting "windowless_rendering_enabled"
     # option.
     settings = {
         "windowless_rendering_enabled": True,
-        "debug": True,
+        "debug": DEBUG,
         "log_severity": cef.LOGSEVERITY_INFO,
         "log_file": "debug.log",
         "context_menu": {
@@ -511,12 +700,11 @@ def main():
         # "file_access_from_file_urls_allowed": True,
         # "universal_access_from_file_urls_allowed": True,
     }
+
     CEF.Initialize(settings=settings, switches=switches)
     create_browser(browser_settings)
     CEF.MessageLoop()
     CEF.Shutdown()
-    print("[screenshot.py] Opening screenshot with default application")
-    open_screenshot_with_default_application(SCREENSHOT_PATH)
 
 
 def check_versions():
@@ -544,13 +732,13 @@ def command_line_arguments():
         if port and port.isnumeric():
             SERVER_PORT = int(port)
         else:
-            print("[screenshot.py] Error: Invalid port argument", port)
+            print("[CEF] Error: Invalid port argument", port)
             sys.exit(1)
         if url.startswith(("https://", "file://")):
             global URL
             URL = url
         else:
-            print("[screenshot.py] Error: Invalid url argument", url)
+            print("[CEF] Error: Invalid url argument", url)
             sys.exit(1)
         if width > 0 and height > 0 and channels in {3, 4}:
             global IMAGE_CHANNELS
@@ -560,7 +748,7 @@ def command_line_arguments():
             VIEWPORT_HEIGHT = height
             IMAGE_CHANNELS = channels
         else:
-            print("[screenshot.py] Error: Invalid width and height", width, height)
+            print("[CEF] Error: Invalid width and height", width, height)
             sys.exit(1)
 
         if SHARED_MEMORY_ID != '':
@@ -570,24 +758,8 @@ def command_line_arguments():
             TEXTURE_BUFFER = np.ndarray((VIEWPORT_WIDTH * VIEWPORT_HEIGHT * IMAGE_CHANNELS, ), dtype=np.float32, buffer=SHM.buf)
 
     elif len(sys.argv) > 1:
-        print("[screenshot.py] Error: Expected arguments: url (width height channels) shm server_port")
+        print("[CEF] Error: Expected arguments: url (width height channels) shm server_port")
         sys.exit(1)
-
-
-def start_socket_client():
-    global SERVER_PORT
-    if not SERVER_PORT:
-        return None
-
-    print("[screenshot.py] Connecting to socket server..")
-
-    # Create a socket object
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    # Connect to the server socket.gethostname()
-    s.connect(('127.0.0.1', SERVER_PORT))
-    global SOCKET_CLIENT
-    SOCKET_CLIENT = s
-    return s
 
 
 def exit_app(browser: _Browser):
@@ -596,13 +768,15 @@ def exit_app(browser: _Browser):
     #   OnLoadError or OnPaint events. Closing browser during these
     #   events may result in unexpected behavior. Use cef.PostTask
     #   function to call exit_app from these events.
-    print("[screenshot.py] Close browser and exit app")
+    print("[CEF] Close browser and exit app")
+    global BROWSER
+    BROWSER = None
     global SHM
     global TEXTURE_BUFFER
-    global SOCKET_CLIENT
-    if SOCKET_CLIENT:
-        SOCKET_CLIENT.close()
-        SOCKET_CLIENT = None
+    if client := Client._instance:
+        Client._instance = None
+        client.sock = None
+        del client
     if SHM:
         SHM.close()
         SHM = None
@@ -611,19 +785,7 @@ def exit_app(browser: _Browser):
     CEF.QuitMessageLoop()
 
 
-def open_screenshot_with_default_application(path):
-    if not os.path.exists(path):
-        return
-    if sys.platform.startswith("darwin"):
-        subprocess.call(("open", path))
-    elif os.name == "nt":
-        # noinspection PyUnresolvedReferences
-        os.startfile(path)
-    elif os.name == "posix":
-        subprocess.call(("xdg-open", path))
-
-
-def create_browser(settings: dict):
+def create_browser(settings: dict) -> _Browser:
     global VIEWPORT_WIDTH, VIEWPORT_HEIGHT
 
     # Create browser in off-screen-rendering mode (windowless mode)
@@ -632,9 +794,8 @@ def create_browser(settings: dict):
     parent_window_handle = 0
     window_info = CEF.WindowInfo()
     window_info.SetAsOffscreen(parent_window_handle)
-    # window_info.SetTransparentPainting(True)
-    print(f"[screenshot.py] Viewport size: {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}")
-    print("[screenshot.py] Loading url: {url}"
+    print(f"[CEF] Viewport size: {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}")
+    print("[CEF] Loading url: {url}"
           .format(url=URL))
     browser: _Browser = CEF.CreateBrowserSync(window_info=window_info,
                                     settings=settings,
@@ -642,95 +803,28 @@ def create_browser(settings: dict):
                                     window_title="OFFSCREEN")
     browser.SetClientHandler(LoadHandler())
     browser.SetClientHandler(RenderHandler())
-    browser.SetClientHandler(KeyboardHandler())
     browser.SendFocusEvent(True)
     # You must call WasResized at least once to let know CEF that
     # viewport size is available and that OnPaint may be called.
     browser.WasResized()
-
-
-def handle_events(browser: _Browser):
-    global SOCKET_CLIENT
-
-    print("[screenshot.py] Start::handle_events", SOCKET_CLIENT)
-
-    buffer = ''
-    while True:
-        if SOCKET_CLIENT is None:
-            exit_app(browser)
-            break
-        try:
-            data = SOCKET_CLIENT.recv(100)
-        except socket.error as e:
-            print(e)
-            exit_app(browser)
-            break
-        if not data:
-            continue
-        buffer += data.decode()
-        while '\n' in buffer:
-            line, buffer = buffer.split('\n', 1)
-            commands = line.split(',')
-            command_id = commands[0]
-            # print(command_id, commands)
-            if command_id == '@':
-                # SPECIAL COMMANDS FROM PARENT PROCESS.
-                command_id = commands[1]
-                if command_id == 'KILL':
-                    exit_app(browser)
-                    return None
-            elif command_id == 'mousemove':
-                x, y = map(int, commands[1:])
-                browser.SendMouseMoveEvent(x=x, y=y, mouseLeave=False)
-            elif command_id == 'click':
-                x, y, mouse_up = map(int, commands[1:-1])
-                mouseButtonType = getattr(cef, f"MOUSEBUTTON_{commands[-1].upper()}")
-                browser.SendMouseClickEvent(x=x, y=y, mouseButtonType=mouseButtonType, mouseUp=bool(mouse_up), clickCount=1)
-            elif command_id == 'resize':
-                width, height = map(int, commands[1:])
-            elif command_id == 'scroll':
-                x, y, sign = map(int, commands[1:])
-                browser.SendMouseWheelEvent(x=x, y=y, deltaX=0, deltaY=sign*10)
-            elif command_id == 'unicode':
-                key_press, char, windows_vk_code, modifiers = map(int, commands[1:])
-                browser.SendKeyEvent({
-                    'type': KeyEventTypes.KEYEVENT_CHAR,  # KeyEventTypes.KEYEVENT_KEYDOWN if key_press==1 else KeyEventTypes.KEYEVENT_KEYUP,
-                    'windows_key_code': char,  # windows_vk_code
-                    'character': char,
-                    'focus_on_editable_field': True,
-                    'is_system_key': False,
-                    'modifiers': modifiers
-                })
-            else:
-                continue
-
-        buffer = ''
+    global BROWSER
+    BROWSER = browser
 
 
 class LoadHandler(object):
-    def OnLoadingStateChange(self, browser, is_loading, **_):
-        """Called when the loading state has changed."""
-        if not is_loading:
-            # Loading is complete
-            sys.stdout.write(os.linesep)
-            print("[screenshot.py] Web page loading is complete")
+    thread: threading.Thread
 
-            # Start event handling...
-            print("[screenshot.py] Running thread to handle events from Blender...")
-            self.thread = threading.Thread(target=handle_events, args=(browser,), name='b3d_cef_handle_events')
-            self.thread.start()
+    def __init__(self) -> None:
+        self.thread = None
 
-            ## print("[screenshot.py] Will save screenshot in 2 seconds")
-            # Give up to 2 seconds for the OnPaint call. Most of the time
-            # it is already called, but sometimes it may be called later.
-            ## CEF.PostDelayedTask(cef.TID_UI, 2000, save_screenshot, browser)
-            CEF.PostDelayedTask(cef.TID_UI, 1000 * 60 * 60, exit_app, browser)
-
-            # def click_button(browser: _Browser):
-            #     browser.ExecuteJavascript("""
-            #         document.getElementById('subscribe-btn').click();
-            #     """)
-            # CEF.PostDelayedTask(cef.TID_UI, 8000, click_button, browser)
+    ## def OnLoadingStateChange(self, browser, is_loading, **_):
+    ##     """Called when the loading state has changed."""
+    ##     if not is_loading:
+    ##         print("[CEF] OnLoadingStateChange -> Load Complete!")
+    ##         if self.thread is None or not self.thread.is_alive():
+    ##             print("[CEF] Running thread to handle events from Blender...")
+    ##             self.thread = threading.Thread(target=receive_events, args=(browser,), name='b3d_cef_handle_events', daemon=True)
+    ##             self.thread.start()
 
     def OnLoadError(self, browser: _Browser, frame, error_code, failed_url, **_):
         """Called when the resource load for a navigation fails
@@ -739,9 +833,9 @@ class LoadHandler(object):
             # We are interested only in loading main url.
             # Ignore any errors during loading of other frames.
             return
-        print("[screenshot.py] ERROR: Failed to load url: {url}"
+        print("[CEF] ERROR: Failed to load url: {url}"
               .format(url=failed_url))
-        print("[screenshot.py] Error code: {code}"
+        print("[CEF] Error code: {code}"
               .format(code=error_code))
         # See comments in exit_app() why PostTask must be used
         CEF.PostTask(cef.TID_UI, exit_app, browser)
@@ -753,10 +847,6 @@ class RenderHandler(object):
         self.frame_count = 0
         self.start_time = time()
 
-        # Start worker thread
-        # t = threading.Thread(target=self.screenshot_worker, args=(writer,))
-        # t.start()
-
     def GetViewRect(self, rect_out: list, **_) -> bool:
         """Called to retrieve the view rectangle which is relative
         to screen coordinates. Return True if the rectangle was
@@ -765,17 +855,18 @@ class RenderHandler(object):
         rect_out.extend([0, 0, VIEWPORT_WIDTH, VIEWPORT_HEIGHT])
         return True
 
-    # def OnCursorChange(self, browser: _Browser, cursor: int) -> None:
-    #     """ Called when the browser's cursor has changed.
-    #         If |type| is CT_CUSTOM then |custom_cursor_info| will be populated with the custom cursor information. """
-    #     pass
-
     def OnPaint(self, browser: _Browser, element_type, paint_buffer: _PaintBuffer, **_) -> None:
         """Called when an element should be painted."""
         global SHM
         if SHM is None:
             print("Can't paint! SHM is not available!")
             return
+        if TEXTURE_BUFFER[-1] != 0:
+            return
+
+        ## client = Client.get()
+        ## if client is None or client.sock is None:
+        ##     return
 
         # Process a frame...
         self.frame_count += 1
@@ -784,31 +875,14 @@ class RenderHandler(object):
             sys.stdout.write(".")
             sys.stdout.flush()
         else:
-            sys.stdout.write("[screenshot.py] OnPaint")
+            sys.stdout.write("[CEF] OnPaint")
             self.OnPaint_called = True
 
         if element_type == cef.PET_VIEW:
             # Buffer string is a huge string, so for performance
             # reasons it would be better not to copy this string.
-            # I think that Python makes a copy of that string when
-            # passing it to SetUserData.
-            ##  buffer_string = paint_buffer.GetBytes(mode="rgba", origin="top-left")
-
-            # Browser object provides GetUserData/SetUserData methods
-            # for storing custom data associated with browser.
-            ## browser.SetUserData("OnPaint.buffer_string", buffer_string)
-
-            # Convert the paint_buffer to a numpy array and reshape it to an image
-            # image: np.ndarray = np.frombuffer(paint_buffer.GetBytes(mode="rgba", origin="top-left"), dtype=np.uint8)
-            # image = image.reshape((browser.GetHeight(), browser.GetWidth(), 4))
-            # Convert the numpy array to a PIL Image and save it
-            # pil_image = Image.fromarray(image)
-            # pil_image.save(SCREENSHOT_PATH)
-
-            global TEXTURE_BUFFER
 
             image = Image.frombytes("RGBA", (VIEWPORT_WIDTH, VIEWPORT_HEIGHT), paint_buffer.GetBytes(mode="rgba", origin="top-left"), "raw", "RGBA", 0, 1)
-            # image.save(SCREENSHOT_PATH, "PNG")
             # Convert the image to a numpy array
             arr = np.array(image)
             # Convert the numpy array to float32
@@ -823,43 +897,22 @@ class RenderHandler(object):
             del image
             del arr
 
-            global SOCKET_CLIENT
-            SOCKET_CLIENT.send(struct.pack('?', True))
-
-            # print("[screenshot.py] Saved image: {path}".format(path=SCREENSHOT_PATH))
-
-            # See comments in exit_app() why PostTask must be used
-            # def _move_mousewheel(browser: _Browser):
-            #     browser.SendMouseWheelEvent(x=100, y=100, deltaX=0, deltaY=-5)
-            # CEF.PostTask(cef.TID_UI, _move_mousewheel, browser)
-            # browser.SendMouseWheelEvent(x=100, y=100, deltaX=0, deltaY=-1)
-
+            # client.sock.settimeout(0.2)
+            ## if client.sock:
+            ##     client.sock.sendall(SOCKET_SIGNAL.BUFFER_UPDATE.to_bytes(4, byteorder='big'))
+            # client.sock.settimeout(None)
+            TEXTURE_BUFFER[-1] = 1
         else:
             raise Exception("Unsupported element_type in OnPaint")
 
         # Calculate FPS every second
         if time() - self.start_time > 1.0:  # one second has passed
             fps = self.frame_count / (time() - self.start_time)
-            print(f'[screenshot.py] FPS: {fps}')
+            print(f'[CEF] FPS: {fps}')
 
             # Reset the frame count and start time
             self.frame_count = 0
             self.start_time = time()
-
-
-class KeyboardHandler:
-
-    def OnPreKeyEvent(self, browser: _Browser, event: dict, event_handle: object, is_keyboard_shortcut_out: list) -> bool:
-        """ Called before a keyboard event is sent to the renderer. |event| contains information about the keyboard event.
-            |event_handle| is the operating system event message, if any. Return true if the event was handled or false otherwise.
-            If the event will be handled in OnKeyEvent() as a keyboard shortcut, set |is_keyboard_shortcut_out[0]| to True and return False. """
-        return False
-
-    def OnKeyEvent(self, browser: _Browser, event: dict, event_handle: object) -> bool:
-        """ Called after the renderer and javascript in the page has had a chance to handle the event.
-            |event| contains information about the keyboard event. |os_event| is the operating system event message, if any.
-            Return true if the keyboard event was handled or false otherwise. Description of the KeyEvent type is in the OnPreKeyEvent() callback. """
-        return False
 
 
 if __name__ == '__main__':

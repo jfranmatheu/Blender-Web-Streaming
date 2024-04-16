@@ -39,6 +39,8 @@ class SOCKET_SIGNAL:
     MOUSE_MOVE = 8
     MOUSE_PRESS = 9
     MOUSE_RELEASE = 10
+    MOUSE_DRAG_START = 11
+    MOUSE_DRAG_END = 12
 
     SCROLL_UP = 16
     SCROLL_DOWN = 17
@@ -70,12 +72,14 @@ class KeyEventFlags:
 
 
 EVENT_DATA_BYTES = {
-    SOCKET_SIGNAL.MOUSE_MOVE        : 'II',    # (X, Y)
-    SOCKET_SIGNAL.MOUSE_PRESS       : 'III',  # (X, Y, MOUSE_BUTTON)
-    SOCKET_SIGNAL.MOUSE_RELEASE     : 'III',  # (X, Y, MOUSE_BUTTON)
-    SOCKET_SIGNAL.SCROLL_UP         : 'II',    # (X, Y)
-    SOCKET_SIGNAL.SCROLL_DOWN       : 'II',    # (X, Y)
-    SOCKET_SIGNAL.UNICODE           : 'II'     # (UNICODE CODE, KeyEventFlags)
+    SOCKET_SIGNAL.MOUSE_MOVE        : 'II',     # (X, Y)
+    SOCKET_SIGNAL.MOUSE_PRESS       : 'III',    # (X, Y, MOUSE_BUTTON)
+    SOCKET_SIGNAL.MOUSE_RELEASE     : 'III',    # (X, Y, MOUSE_BUTTON)
+    SOCKET_SIGNAL.MOUSE_DRAG_START  : 'II',     # (X, Y)
+    SOCKET_SIGNAL.MOUSE_DRAG_END    : 'II',     # (X, Y)
+    SOCKET_SIGNAL.SCROLL_UP         : 'II',     # (X, Y)
+    SOCKET_SIGNAL.SCROLL_DOWN       : 'II',     # (X, Y)
+    SOCKET_SIGNAL.UNICODE           : 'II'      # (UNICODE CODE, KeyEventFlags)
 }
 
 
@@ -476,12 +480,17 @@ class CEF_Python_Controller:
 
     def _modal(self, context: Context, event: Event, tweak) -> set[str]:
         ## print('_modal')
+        if event.type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'}:
+            self.renderer_mouse_pos = (event.mouse_region_x, self.height - event.mouse_region_y)
+            self.prev_mouse_pos = self.mouse_pos.copy()
+            self.mouse_pos = Vector((event.mouse_region_x, event.mouse_region_y))
+            self.mouse_move(context, self.renderer_mouse_pos)
         if self.modal(context, event, self.renderer_mouse_pos):
             return OpsReturn.RUN
         return OpsReturn.FINISH
 
     def _exit(self, context: Context, cancel: bool) -> None:
-        self.modal_exit(context, cancel)
+        self.modal_exit(context, self.renderer_mouse_pos, cancel)
 
     def _draw_prepare(self, context: Context) -> None:
         pass
@@ -536,9 +545,15 @@ class CEF_Python_Controller:
     def mouse_down(self, mouse, mouse_type: MOUSE_BUTTON) -> None:
         ## print("mouse_down")
         self.send(SOCKET_SIGNAL.MOUSE_PRESS, *mouse, mouse_type)
+    
+    def mouse_drag_start(self, mouse) -> None:
+        self.send(SOCKET_SIGNAL.MOUSE_DRAG_START, *mouse)
+        
+    def mouse_drag_end(self, mouse) -> None:
+        self.send(SOCKET_SIGNAL.MOUSE_DRAG_END, *mouse)
 
     def invoke(self, context: Context, event: Event, mouse) -> bool:
-        ## print("invoke")
+        print("[GZ::invoke() -> ", event.type, event.value)
         if event.type in {'LEFTMOUSE', 'RIGHTMOUSE', 'MIDDLEMOUSE'}:
             if event.value in {'PRESS', 'RELEASE'}:
                 mouse_button = event.type.removesuffix('MOUSE')
@@ -551,6 +566,8 @@ class CEF_Python_Controller:
 
             elif event.type == 'LEFTMOUSE' and event.value == 'CLICK_DRAG':
                 self.is_dragging = True
+                print("START DRAGGING")
+                self.mouse_drag_start(mouse)
                 return True
             else:
                 return False
@@ -581,17 +598,21 @@ class CEF_Python_Controller:
         pass
 
     def modal(self, context: Context, event: Event, mouse) -> bool:
+        # print("[GZ::modal() -> ", event.type, event.value)
         if self.is_dragging:
             if event.type == 'LEFTMOUSE' and event.value == 'RELEASE':
-                self.mouse_up('LEFT')
+                self.mouse_drag_end(mouse)
+                self.is_dragging = False
+                print("END DRAGGING")
                 return False
-            if event.type in {'MOUSEMOVE', 'INBETWEEN_MOUSEMOVE'}:
-                self.mouse_move(context, mouse)
             return True
         return False
 
-    def modal_exit(self, context: Context, cancel: bool) -> None:
-        self.is_dragging = False
+    def modal_exit(self, context: Context, mouse, cancel: bool) -> None:
+        if self.is_dragging:
+            print("END DRAGGING")
+            self.mouse_drag_end(mouse)
+            self.is_dragging = False
 
 
     # Drawing.

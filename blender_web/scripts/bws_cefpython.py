@@ -42,6 +42,7 @@ import sys
 import socket
 from typing import Any
 from time import time, sleep
+from math import floor
 from multiprocessing import shared_memory
 import threading
 import struct
@@ -72,8 +73,51 @@ SOCKET_LOCK = threading.Lock()
 
 SHM = None
 TEXTURE_BUFFER = None
-BROWSER = None
 
+# Off-screen-rendering requires setting "windowless_rendering_enabled"
+# option.
+settings = {
+    "windowless_rendering_enabled": True,
+    "debug": DEBUG,
+    "log_severity": cef.LOGSEVERITY_INFO,
+    "log_file": "debug.log",
+    "context_menu": {
+        "enabled": False,
+    },
+    "downloads_enabled": False,
+    "background_color": 0x00, # fully transparent
+    # "unique_request_context_per_browser": True,
+    # "remote_debugging_port": 0,
+    # "ignore_certificate_errors": True,
+    # "auto_zooming": "system_dpi",
+    # "locales_dir_path": cef.GetModuleDirectory()+"/locales",
+    # "resources_dir_path": cef.GetModuleDirectory(),
+    # "browser_subprocess_path": "%s/%s" % (cef.GetModuleDirectory(), "subprocess"),
+}
+switches = {
+    # GPU acceleration is not supported in OSR mode, so must disable
+    # it using these Chromium switches (Issue #240 and #463)
+    "disable-gpu": "",
+    "disable-gpu-compositing": "",
+    # Tweaking OSR performance by setting the same Chromium flags
+    # as in upstream cefclient (Issue #240).
+    "enable-begin-frame-scheduling": "",
+    "disable-surfaces": "",  # This is required for PDF ext to work
+    # "enable-media-stream": "", # video and/or audio streaming.
+    # "proxy-server": "socks5://127.0.0.1:8888", # proxy server?
+    # "disable-d3d11": "",
+    # "off-screen-rendering-enabled": "",
+    # "off-screen-frame-rate": "60",
+    # "disable-gpu-vsync": "",
+    # "disable-web-security": "",
+}
+browser_settings = {
+    # Tweaking OSR performance (Issue #240)
+    "windowless_frame_rate": 30,  # Default frame rate in CEF is 30
+    "background_color": 0x00, # fully transparent
+    # "file_access_from_file_urls_allowed": True,
+    # "universal_access_from_file_urls_allowed": True,
+}
 
 class SOCKET_SIGNAL:
     PING = 0
@@ -84,6 +128,8 @@ class SOCKET_SIGNAL:
     MOUSE_MOVE = 8
     MOUSE_PRESS = 9
     MOUSE_RELEASE = 10
+    MOUSE_DRAG_START = 11
+    MOUSE_DRAG_END = 12
 
     SCROLL_UP = 16
     SCROLL_DOWN = 17
@@ -115,12 +161,14 @@ class KeyEventFlags:
 
 
 EVENT_DATA_BYTES = {
-    SOCKET_SIGNAL.MOUSE_MOVE        : 'II',    # (X, Y)
-    SOCKET_SIGNAL.MOUSE_PRESS       : 'III',  # (X, Y, MOUSE_BUTTON)
-    SOCKET_SIGNAL.MOUSE_RELEASE     : 'III',  # (X, Y, MOUSE_BUTTON)
-    SOCKET_SIGNAL.SCROLL_UP         : 'II',    # (X, Y)
-    SOCKET_SIGNAL.SCROLL_DOWN       : 'II',    # (X, Y)
-    SOCKET_SIGNAL.UNICODE           : 'II'     # (UNICODE CODE, KeyEventFlags)
+    SOCKET_SIGNAL.MOUSE_MOVE        : 'II',     # (X, Y)
+    SOCKET_SIGNAL.MOUSE_PRESS       : 'III',    # (X, Y, MOUSE_BUTTON)
+    SOCKET_SIGNAL.MOUSE_RELEASE     : 'III',    # (X, Y, MOUSE_BUTTON)
+    SOCKET_SIGNAL.MOUSE_DRAG_START  : 'II',     # (X, Y)
+    SOCKET_SIGNAL.MOUSE_DRAG_END    : 'II',     # (X, Y)
+    SOCKET_SIGNAL.SCROLL_UP         : 'II',     # (X, Y)
+    SOCKET_SIGNAL.SCROLL_DOWN       : 'II',     # (X, Y)
+    SOCKET_SIGNAL.UNICODE           : 'II'      # (UNICODE CODE, KeyEventFlags)
 }
 
 
@@ -549,6 +597,8 @@ class Client:
         self.port = port
         self.connected = False
 
+        self.is_dragging = False
+
     def tcp_echo_client(self):
         ## self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         ## # self.sock.setblocking(False)
@@ -561,7 +611,8 @@ class Client:
         self.read_thread.start()
 
     def read_data(self):
-        global BROWSER
+        while BrowserWrapper.get() is None:
+            sleep(0.1)
         global SERVER_PORT
         # https://realpython.com/python-sockets/
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -570,6 +621,8 @@ class Client:
             # s.settimeout(1.0)
             print("[CLIENT] Connected to", self.host, self.port)
             while self.sock is not None:
+                if BrowserWrapper._instance is None:
+                    break
                 try:
                     signal_raw = s.recv(4)
                     if not signal_raw:
@@ -582,7 +635,7 @@ class Client:
                 except socket.error as e:
                     self.sock = None
                     # print("[CLIENT] Some socket error! Closing client and app! BYE BYE!", e)
-                    pass
+                    continue
 
                 signal = int.from_bytes(signal_raw, byteorder='big')
                 print("[CLIENT] Received signal:", signal)
@@ -594,7 +647,7 @@ class Client:
                     continue
 
                 if signal == SOCKET_SIGNAL.KILL:
-                    exit_app(BROWSER)
+                    exit_app()
                     return None
 
                 event_data_bytes = EVENT_DATA_BYTES.get(signal, None)
@@ -613,7 +666,20 @@ class Client:
                 print("[CLIENT] Received event data:", event_data)
 
                 if signal == SOCKET_SIGNAL.MOUSE_MOVE:
-                    BROWSER.SendMouseMoveEvent(*event_data, mouseLeave=False)
+                    if self.is_dragging:
+                        # x0, y0 = self.drag_prev_mouse
+                        # x1, y1 = event_data
+                        # diff_x = abs(x1 - x0)
+                        # steps = floor(diff_x / 10)
+                        # if steps > 0:
+                        #     sign = 1 if x1 > x0 else -1
+                        #     off_x = x1 + 10 * sign
+                        #     for step_index in range(steps):
+                        #         BrowserWrapper.get().browser.SendMouseMoveEvent(off_x, self.drag_init_mouse[1], mouseLeave=False)
+                        #         off_x += (10 * sign)
+                        # self.drag_prev_mouse = event_data
+                        event_data = (event_data[0], self.drag_init_mouse[1])
+                    BrowserWrapper.get().browser.SendMouseMoveEvent(*event_data, mouseLeave=False)
 
                 elif signal in {SOCKET_SIGNAL.MOUSE_PRESS, SOCKET_SIGNAL.MOUSE_RELEASE}:
                     x, y, _mouse_type = event_data
@@ -627,11 +693,19 @@ class Client:
                         raise ValueError("[CLIENT] Unexpected mouse type value!", _mouse_type)
 
                     mouse_up = signal == SOCKET_SIGNAL.MOUSE_RELEASE
-                    BROWSER.SendMouseClickEvent(x=x, y=y, mouseButtonType=getattr(cef, mouse_type), mouseUp=mouse_up, clickCount=1)
+                    BrowserWrapper.get().browser.SendMouseClickEvent(x=x, y=y, mouseButtonType=getattr(cef, mouse_type), mouseUp=mouse_up, clickCount=1)
 
                 elif signal in {SOCKET_SIGNAL.SCROLL_UP, SOCKET_SIGNAL.SCROLL_DOWN}:
                     sign = 1 if signal == SOCKET_SIGNAL.SCROLL_DOWN else -1
-                    BROWSER.SendMouseWheelEvent(*event_data, deltaX=0, deltaY=sign*10)
+                    BrowserWrapper.get().browser.SendMouseWheelEvent(*event_data, deltaX=0, deltaY=sign*10)
+
+                elif signal in {SOCKET_SIGNAL.MOUSE_DRAG_START, SOCKET_SIGNAL.MOUSE_DRAG_END}:
+                    self.is_dragging = signal == SOCKET_SIGNAL.MOUSE_DRAG_START
+                    # if self.is_dragging:
+                    #     BrowserWrapper.get().get_element_at_mouse_position(*event_data)
+                    self.drag_prev_mouse = event_data
+                    self.drag_init_mouse = event_data
+                    BrowserWrapper.get().browser.SendMouseClickEvent(*event_data, mouseButtonType=cef.MOUSEBUTTON_LEFT, mouseUp=(not self.is_dragging), clickCount=1)
 
                 elif signal == SOCKET_SIGNAL.UNICODE:
                     char_code, flags = event_data
@@ -643,9 +717,9 @@ class Client:
                         'is_system_key': False,
                         'modifiers': flags
                     }
-                    BROWSER.SendKeyEvent(key_event)
+                    BrowserWrapper.get().browser.SendKeyEvent(key_event)
 
-        exit_app(BROWSER)
+        exit_app()
 
 
 def main():
@@ -653,56 +727,9 @@ def main():
     sys.excepthook = CEF.ExceptHook  # To shutdown all CEF processes on error
 
     command_line_arguments()
-
-    Client.get(create=True).tcp_echo_client()
-
-    # Off-screen-rendering requires setting "windowless_rendering_enabled"
-    # option.
-    settings = {
-        "windowless_rendering_enabled": True,
-        "debug": DEBUG,
-        "log_severity": cef.LOGSEVERITY_INFO,
-        "log_file": "debug.log",
-        "context_menu": {
-            "enabled": False,
-        },
-        "downloads_enabled": False,
-        "background_color": 0x00, # fully transparent
-        # "unique_request_context_per_browser": True,
-        # "remote_debugging_port": 0,
-        # "ignore_certificate_errors": True,
-        # "auto_zooming": "system_dpi",
-        # "locales_dir_path": cef.GetModuleDirectory()+"/locales",
-        # "resources_dir_path": cef.GetModuleDirectory(),
-        # "browser_subprocess_path": "%s/%s" % (cef.GetModuleDirectory(), "subprocess"),
-    }
-    switches = {
-        # GPU acceleration is not supported in OSR mode, so must disable
-        # it using these Chromium switches (Issue #240 and #463)
-        "disable-gpu": "",
-        "disable-gpu-compositing": "",
-        # Tweaking OSR performance by setting the same Chromium flags
-        # as in upstream cefclient (Issue #240).
-        "enable-begin-frame-scheduling": "",
-        "disable-surfaces": "",  # This is required for PDF ext to work
-        # "enable-media-stream": "", # video and/or audio streaming.
-        # "proxy-server": "socks5://127.0.0.1:8888", # proxy server?
-        # "disable-d3d11": "",
-        # "off-screen-rendering-enabled": "",
-        # "off-screen-frame-rate": "60",
-        # "disable-gpu-vsync": "",
-        # "disable-web-security": "",
-    }
-    browser_settings = {
-        # Tweaking OSR performance (Issue #240)
-        "windowless_frame_rate": 30,  # Default frame rate in CEF is 30
-        "background_color": 0x00, # fully transparent
-        # "file_access_from_file_urls_allowed": True,
-        # "universal_access_from_file_urls_allowed": True,
-    }
-
     CEF.Initialize(settings=settings, switches=switches)
-    create_browser(browser_settings)
+    BrowserWrapper.get()
+    Client.get(create=True).tcp_echo_client()
     CEF.MessageLoop()
     CEF.Shutdown()
 
@@ -762,15 +789,13 @@ def command_line_arguments():
         sys.exit(1)
 
 
-def exit_app(browser: _Browser):
+def exit_app():
     # Important note:
     #   Do not close browser nor exit app from OnLoadingStateChange
     #   OnLoadError or OnPaint events. Closing browser during these
     #   events may result in unexpected behavior. Use cef.PostTask
     #   function to call exit_app from these events.
     print("[CEF] Close browser and exit app")
-    global BROWSER
-    BROWSER = None
     global SHM
     global TEXTURE_BUFFER
     if client := Client._instance:
@@ -781,34 +806,64 @@ def exit_app(browser: _Browser):
         SHM.close()
         SHM = None
         TEXTURE_BUFFER = None
-    browser.CloseBrowser()
-    CEF.QuitMessageLoop()
+    BrowserWrapper.get().close()
 
 
-def create_browser(settings: dict) -> _Browser:
-    global VIEWPORT_WIDTH, VIEWPORT_HEIGHT
 
-    # Create browser in off-screen-rendering mode (windowless mode)
-    # by calling SetAsOffscreen method. In such mode parent window
-    # handle can be NULL (0).
-    parent_window_handle = 0
-    window_info = CEF.WindowInfo()
-    window_info.SetAsOffscreen(parent_window_handle)
-    print(f"[CEF] Viewport size: {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}")
-    print("[CEF] Loading url: {url}"
-          .format(url=URL))
-    browser: _Browser = CEF.CreateBrowserSync(window_info=window_info,
-                                    settings=settings,
-                                    url=URL,
-                                    window_title="OFFSCREEN")
-    browser.SetClientHandler(LoadHandler())
-    browser.SetClientHandler(RenderHandler())
-    browser.SendFocusEvent(True)
-    # You must call WasResized at least once to let know CEF that
-    # viewport size is available and that OnPaint may be called.
-    browser.WasResized()
-    global BROWSER
-    BROWSER = browser
+class BrowserWrapper:
+    _instance: 'BrowserWrapper' = None
+
+    @classmethod
+    def get(cls) -> 'BrowserWrapper':
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    def __init__(self):
+        global VIEWPORT_HEIGHT
+        global VIEWPORT_WIDTH
+        # Create browser in off-screen-rendering mode (windowless mode)
+        # by calling SetAsOffscreen method. In such mode parent window
+        # handle can be NULL (0).
+        parent_window_handle = 0
+        window_info = CEF.WindowInfo()
+        window_info.SetAsOffscreen(parent_window_handle)
+        print(f"[CEF] Viewport size: {VIEWPORT_WIDTH}x{VIEWPORT_HEIGHT}")
+        print("[CEF] Loading url: {url}"
+            .format(url=URL))
+        browser: _Browser = CEF.CreateBrowserSync(window_info=window_info,
+                                        settings=browser_settings,
+                                        url=URL,
+                                        window_title="OFFSCREEN")
+        browser.SetClientHandler(LoadHandler())
+        browser.SetClientHandler(RenderHandler())
+        browser.SendFocusEvent(True)
+        # You must call WasResized at least once to let know CEF that
+        # viewport size is available and that OnPaint may be called.
+        browser.WasResized()
+        self.browser = browser
+
+    def get_element_at_mouse_position(self, x, y):
+        if self.browser is None:
+            return
+        
+        def _print_element(self, html):
+            # Print HTML of the element at mouse position
+            print(html)
+        # Execute JavaScript to find the element at mouse position
+        script = f"""
+            var element = document.elementFromPoint({x}, {y});
+            element.outerHTML;
+        """
+        self.browser.ExecuteJavascript(script, callback=_print_element)
+
+    def close(self):
+        if self.browser:
+            self.browser.CloseBrowser()
+            self.browser = None
+        BrowserWrapper._instance = None
+        CEF.QuitMessageLoop()
+        CEF.Shutdown()
 
 
 class LoadHandler(object):

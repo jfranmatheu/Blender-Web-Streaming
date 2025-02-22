@@ -385,7 +385,7 @@
   <div class="menu-wrapper">
     <menu class="menu">
       <li>
-        <button class="menu-btn">
+        <button id="btn-layer-new" class="menu-btn">
           <object class="menu-icon" data="images/svg/new-layer.svg" type="image/svg+xml"></object>
           <span>New Layer</span>
           <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>N</span>
@@ -393,7 +393,7 @@
       </li>
 
       <li>
-        <button class="menu-btn">
+        <button id="btn-layer-rotate" class="menu-btn">
           <object class="menu-icon" data="images/svg/rotate-layer.svg" type="image/svg+xml"></object>
           <span>Rotate Layer</span>
           <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>R</span>
@@ -401,7 +401,7 @@
       </li>
 
       <li>
-        <button class="menu-btn">
+        <button id="btn-layer-bring-to-front" class="menu-btn">
           <object class="menu-icon" data="images/svg/bring-to-front.svg" type="image/svg+xml"></object>
           <span>Bring to Front</span>
           <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>]</span>
@@ -409,7 +409,7 @@
       </li>
 
       <li>
-        <button class="menu-btn">
+        <button id="btn-layer-replace" class="menu-btn">
           <object class="menu-icon" data="images/svg/replace-layer.svg" type="image/svg+xml"></object>
           <span>Replace Layer</span>
           <span class="menu-hotkey"><em class="sr-only">Hotkey: </em>⇧R</span>
@@ -599,6 +599,53 @@
       btn.prepend(newSvgObject);
     });
   });
+</script>
+
+<script>
+// Add this script before the existing scripts
+
+// Monitor button clicks
+document.addEventListener('click', function(e) {
+  if (e.target.closest('button')) {
+    const button = e.target.closest('button');
+    const buttonId = button.id;
+    // Send button click event to Python
+    if (window.cefQuery) {
+      window.cefQuery({
+        request: JSON.stringify({
+          type: 'button_click',
+          id: buttonId
+        }),
+        onSuccess: function(response) {},
+        onFailure: function(error_code, error_message) {}
+      });
+    }
+  }
+});
+
+// Monitor input changes
+document.addEventListener('change', function(e) {
+  if (e.target.matches('input')) {
+    const input = e.target;
+    const inputId = input.id;
+    const value = input.value;
+    const type = input.type;
+    
+    // Send input change event to Python
+    if (window.cefQuery) {
+      window.cefQuery({
+        request: JSON.stringify({
+          type: 'input_change', 
+          id: inputId,
+          value: value,
+          input_type: type
+        }),
+        onSuccess: function(response) {},
+        onFailure: function(error_code, error_message) {}
+      });
+    }
+  }
+});
 </script>
 
 </html>

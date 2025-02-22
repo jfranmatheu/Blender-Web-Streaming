@@ -9,12 +9,16 @@ import struct
 import numpy as np
 from os import path
 from string import ascii_letters, digits as ascii_digits, ascii_uppercase
+from pathlib import Path
 
 import bpy
 import gpu
 from gpu_extras.batch import batch_for_shader
 from mathutils import Vector
 from .shaders import IMAGE_SHADER
+
+
+HTML_FILENAME = 'test_web.html'
 
 
 FPS = 30
@@ -124,15 +128,15 @@ class BWS_OT_web_navigator_cefpython(bpy.types.Operator):
 
         # Start the Pyppeteer process in a new process to avoid blocking the UI
         # We need to use a virtual environment with Python 3.9...
-        python_executable = "X:/@jfranmatheu/BlenderWebStreaming/.env_cefpython/Scripts/python.exe"
         # python_executable = path.join(path.dirname(path.abspath(__file__)), '.env_cefpython', 'Scripts', 'python.exe')
+        html_example = path.abspath(path.join(path.dirname(__file__), 'html', HTML_FILENAME))
         self.process = subprocess.Popen(
             [
-                python_executable,
-                path.join(path.dirname(__file__), 'scripts', 'bws_cefpython.py'),
+                path.abspath(path.join(path.dirname(__file__), 'venv', '.env_cefpython', 'Scripts', 'python.exe')),
+                path.abspath(path.join(path.dirname(__file__), 'scripts', 'bws_cefpython.py')),
                 '--',
                 # "file://C:/Users/JF/Videos/AddonsMedia/2020-08-25_09-04-34.mp4",
-                'file://X:/@jfranmatheu/BlenderWebStreaming/blender_web/scripts/color_picker.html', # 'https://twitter.com/Blender', # 'https://youtu.be/_cMxraX_5RE',
+                f'file://{html_example}', # 'https://twitter.com/Blender', # 'https://youtu.be/_cMxraX_5RE',
                 f'{context.region.width},{context.region.height},{channels}',
                 self.shm.name,
                 str(server_port)

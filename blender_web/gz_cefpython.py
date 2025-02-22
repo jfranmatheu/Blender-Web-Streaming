@@ -8,6 +8,7 @@ from os import path
 import threading
 from queue import Queue
 import asyncio
+from pathlib import Path
 
 import bpy
 import gpu
@@ -24,6 +25,9 @@ from .shaders import IMAGE_SHADER
 SOCKET_LOCK = threading.Lock()
 
 FPS = 30
+
+
+HTML_FILENAME = 'color_picker.html'
 
 
 #############################################################################################
@@ -46,6 +50,10 @@ class SOCKET_SIGNAL:
     SCROLL_DOWN = 17
 
     UNICODE = 24
+    
+    # UI Events
+    BUTTON_CLICK = 32
+    INPUT_CHANGE = 33
 
 
 class MOUSE_BUTTON:
@@ -79,7 +87,23 @@ EVENT_DATA_BYTES = {
     SOCKET_SIGNAL.MOUSE_DRAG_END    : 'II',     # (X, Y)
     SOCKET_SIGNAL.SCROLL_UP         : 'II',     # (X, Y)
     SOCKET_SIGNAL.SCROLL_DOWN       : 'II',     # (X, Y)
-    SOCKET_SIGNAL.UNICODE           : 'II'      # (UNICODE CODE, KeyEventFlags)
+    SOCKET_SIGNAL.UNICODE           : 'II',     # (UNICODE CODE, KeyEventFlags)
+    SOCKET_SIGNAL.BUTTON_CLICK      : 'I',      # (button_id length, button_id string)
+    SOCKET_SIGNAL.INPUT_CHANGE      : 'II',     # (input_id length, input_id string, type_id (INPUT_TYPE_ID) of value, value (int, float, str, bool...))
+}
+
+INPUT_TYPE_ID = {
+    'int'   : 0,
+    'float' : 1,
+    'str'   : 2,
+    'bool'  : 3,
+    'color' : 4,
+    'vector' : 5,
+    'matrix' : 6,
+    'enum' : 7,
+    'object' : 8,
+    'collection' : 9,
+    'rna' : 10,
 }
 
 
@@ -156,27 +180,31 @@ class CEF_Python_Controller:
         self.thread = threading.Thread(target=self.echo_server, daemon=True)
         self.thread.start()
 
-    def start_renderer(self) -> None:
-        python_executable = "X:/@jfranmatheu/BlenderWebStreaming/.env_cefpython/Scripts/python.exe"
+    def start_renderer(self, html_filepath) -> None:
         self.process = subprocess.Popen(
             [
-                python_executable,
-                path.join(path.dirname(__file__), 'scripts', 'bws_cefpython.py'),
+                path.abspath(path.join(path.dirname(__file__), 'venv', '.env_cefpython', 'Scripts', 'python.exe')),
+                path.abspath(path.join(path.dirname(__file__), 'scripts', 'bws_cefpython.py')),
                 '--',
-                'file://X:/@jfranmatheu/BlenderWebStreaming/blender_web/scripts/color_picker.html',
+                f'file://{html_filepath}',
                 f'{self.width},{self.height},{4}',
                 self.shm.name,
                 str(self.port)
             ],
             shell=True
         )
+        return True
 
     def start_event_timer(self, context: Context):
         self._event_timer = context.window_manager.event_timer_add(1 / FPS, window=context.window)
 
-    def start(self, context: Context) -> None:
+    def start(self, context: Context) -> bool:
         self.is_running = True
         self.first_connection = True
+
+        html_example = path.abspath(path.join(path.dirname(__file__), 'html', HTML_FILENAME))
+        if not path.exists(html_example):
+            return False
 
         # self.event_queue = Queue()
 
@@ -186,10 +214,12 @@ class CEF_Python_Controller:
         self.update_shm_buffer()
         self.update_batch()
         self.update_texture()
-        self.start_renderer()
+        self.start_renderer(html_example)
         self.start_event_timer(context)
 
         context.region.tag_redraw()
+        
+        return True
 
     def stop(self, context: Context) -> None:
         ## print("STOP!")
@@ -320,6 +350,20 @@ class CEF_Python_Controller:
                         elif signal == SOCKET_SIGNAL.BUFFER_UPDATE:
                             print("[SERVER] Received BUFFER_UPDATE signal")
                             self.is_dirty = True
+                        elif signal == SOCKET_SIGNAL.BUTTON_CLICK:
+                            # Read button ID length
+                            button_id_len = int.from_bytes(conn.recv(4), byteorder='big')
+                            # Read button ID
+                            button_id = conn.recv(button_id_len).decode('utf-8')
+                            self.handle_button_click(button_id)
+                        elif signal == SOCKET_SIGNAL.INPUT_CHANGE:
+                            # Read input ID length
+                            input_id_len = int.from_bytes(conn.recv(4), byteorder='big')
+                            # Read input ID
+                            input_id = conn.recv(input_id_len).decode('utf-8')
+                            # Read value
+                            value = struct.unpack('f', conn.recv(4))[0]
+                            self.handle_input_change(input_id, value)
                         else:
                             print(f"[SERVER] Unknown signal: {signal}")
 
@@ -425,7 +469,8 @@ class CEF_Python_Controller:
     def _poll(self, context: Context, instance: 'CEF_Python_Controller') -> bool:
         if context.window_manager.show_gz_cefpython:
             if instance is not None and not instance.is_running:
-                instance.start(context)
+                if not instance.start(context):
+                    return False
             if instance is not None and instance.process and instance.process.poll() is not None:
                 # The client was closed due to some issue... Restart.
                 print("[B3D] Client closed due to some issue. Restarting...")
@@ -634,6 +679,32 @@ class CEF_Python_Controller:
         if pixel_index >= len(self.shm_texture_buffer):
             return None
         return self.shm_texture_buffer[pixel_index + 3]
+
+    def handle_button_click(self, button_id: str) -> None:
+        """Handle button click events from CEF"""
+        print(f"Button clicked: {button_id}")
+        # Add your button click handling logic here
+        # For example:
+        if button_id == "btn-layer-new":
+            # Handle new layer button
+            pass
+        elif button_id == "btn-layer-rotate":
+            # Handle rotate layer button
+            pass
+        # etc...
+
+    def handle_input_change(self, input_id: str, value: float) -> None:
+        """Handle input change events from CEF"""
+        print(f"Input changed: {input_id} = {value}")
+        # Add your input change handling logic here
+        # For example:
+        if input_id == "cymk-cyan":
+            # Handle cyan value change
+            pass
+        elif input_id == "cymk-magenta":
+            # Handle magenta value change
+            pass
+        # etc...
 
 
 ################################################################

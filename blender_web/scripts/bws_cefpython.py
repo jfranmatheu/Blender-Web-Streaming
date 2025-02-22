@@ -47,6 +47,7 @@ from multiprocessing import shared_memory
 import threading
 import struct
 from queue import Queue
+import json
 
 
 try:
@@ -135,6 +136,10 @@ class SOCKET_SIGNAL:
     SCROLL_DOWN = 17
 
     UNICODE = 24
+    
+    # UI Events
+    BUTTON_CLICK = 32
+    INPUT_CHANGE = 33
 
 
 class MOUSE_BUTTON:
@@ -168,7 +173,9 @@ EVENT_DATA_BYTES = {
     SOCKET_SIGNAL.MOUSE_DRAG_END    : 'II',     # (X, Y)
     SOCKET_SIGNAL.SCROLL_UP         : 'II',     # (X, Y)
     SOCKET_SIGNAL.SCROLL_DOWN       : 'II',     # (X, Y)
-    SOCKET_SIGNAL.UNICODE           : 'II'      # (UNICODE CODE, KeyEventFlags)
+    SOCKET_SIGNAL.UNICODE           : 'II',     # (UNICODE CODE, KeyEventFlags)
+    SOCKET_SIGNAL.BUTTON_CLICK      : 'I',      # (button_id length, button_id string)
+    SOCKET_SIGNAL.INPUT_CHANGE      : 'If',     # (input_id length, input_id string, value)
 }
 
 
@@ -465,6 +472,7 @@ class CEF:
             A call to Initialize() must have a corresponding call to Shutdown() so that CEF exits cleanly.
             Otherwise when application closes data (eg. storage, cookies) might not be saved to disk
             or the process might freeze (experienced on Windows XP). """
+        print("Initializing CEF")
         return cef.Initialize(settings=settings, switches=switches)
 
     @staticmethod
@@ -837,6 +845,7 @@ class BrowserWrapper:
                                         window_title="OFFSCREEN")
         browser.SetClientHandler(LoadHandler())
         browser.SetClientHandler(RenderHandler())
+        browser.SetClientHandler(JSQueryHandler())
         browser.SendFocusEvent(True)
         # You must call WasResized at least once to let know CEF that
         # viewport size is available and that OnPaint may be called.
@@ -969,6 +978,42 @@ class RenderHandler(object):
             self.frame_count = 0
             self.start_time = time()
 
+'''
+class JSQueryHandler:
+    def OnJSQuery(self, browser, frame, query_id, request, persistent, callback):
+        """Handle JavaScript queries from the web page"""
+        try:
+            data = json.loads(request)
+            event_type = data['type']
+            
+            if event_type == 'button_click':
+                button_id = data['id']
+                # Send button click event to Blender
+                button_id_bytes = button_id.encode('utf-8')
+                client = Client.get()
+                client.sock.send(SOCKET_SIGNAL.BUTTON_CLICK.to_bytes(4, byteorder='big'))
+                client.sock.send(len(button_id_bytes).to_by<tes(4, byteorder='big'))
+                client.sock.send(button_id_bytes)
+
+            elif event_type == 'input_change':
+                input_id = data['id']
+                value = data['value']
+                input_type = data['input_type']
+                
+                # Send input change event to Blender
+                input_id_bytes = input_id.encode('utf-8')
+                client = Client.get()
+                client.sock.send(SOCKET_SIGNAL.INPUT_CHANGE.to_bytes(4, byteorder='big'))
+                client.sock.send(len(input_id_bytes).to_bytes(4, byteorder='big'))
+                client.sock.send(input_id_bytes)
+                client.sock.send(struct.pack('f', float(value)))
+
+            callback.Success("")
+            
+        except Exception as e:
+            print(f"Error handling JavaScript query: {e}")
+            callback.Failure(0, str(e))
+'''
 
 if __name__ == '__main__':
     main()

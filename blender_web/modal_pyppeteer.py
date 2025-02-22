@@ -1,5 +1,4 @@
 import bpy
-import websockets
 import socket
 import asyncio
 import threading
